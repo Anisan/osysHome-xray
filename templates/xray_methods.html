@@ -1,0 +1,50 @@
+{% extends "xray_main.html" %}
+
+{% block tab %}
+<link rel="stylesheet" href="https://cdn.datatables.net/2.2.1/css/dataTables.dataTables.css">
+<script src="https://cdn.datatables.net/2.2.1/js/dataTables.js"></script>
+    <div  class="table-responsive">
+        <table id="methods_stat" class="table table-hover table-striped">
+            <thead>
+                <tr>
+                    <th>Method</th>
+                    <th>Object</th>
+                    <th>Count executed</th>
+                    <th>Last executed</th>
+                    <th>Source</th>
+                    <th>Params</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, value in methods.items() %}
+                <tr>
+                    <td class="py-1" style="vertical-align:middle">
+                        {{key}}
+                    </td>
+                    <td class="py-1" style="vertical-align:middle">
+                        <a href="Objects?view=object&object={{value.object_id}}&tab=methods">{{value.description}}</a>
+                    </td>
+                    <td class="py-1">
+                        {{ value.count_executed}}
+                    </td>
+                    <td class="py-1">
+                        {{ value.last_executed }}
+                    </td>
+                    <td class="py-1">
+                        <span class='badge bg-success'>{{ value.source }}</span>
+                    </td>
+                    <td class="py-1">
+                        {{ value.params }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <script>
+        new DataTable('#methods_stat', {
+            order: [[3, 'desc']],
+            stateSave: true
+        });
+    </script>
+{% endblock %}

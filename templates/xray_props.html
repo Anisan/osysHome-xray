@@ -1,0 +1,58 @@
+{% extends "xray_main.html" %}
+
+{% block tab %}
+<link rel="stylesheet" href="https://cdn.datatables.net/2.2.1/css/dataTables.dataTables.css">
+<script src="https://cdn.datatables.net/2.2.1/js/dataTables.js"></script>
+    <div  class="table-responsive">
+        <table id="props_stat" class="table table-hover table-striped">
+            <thead>
+                <tr>
+                    <th>Property</th>
+                    <th>Object</th>
+                    <th>Value</th>
+                    <th>Count read</th>
+                    <th>Last read</th>
+                    <th>Count write</th>
+                    <th>Last write</th>
+                    <th>Source</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, value in props.items() %}
+                <tr>
+                    <td class="py-1" style="vertical-align:middle">
+                        {{ key }}
+                    </td>
+                    <td class="py-1" style="vertical-align:middle">
+                        <a href="Objects?view=object&object={{value.object_id}}&tab=properties">{{value.description}}</a>
+                    </td>
+                    <td class="py-1">
+                        {{ value.value }}
+                    </td>
+                    <td class="py-1">
+                        {{ value.count_read}}
+                    </td>
+                    <td class="py-1">
+                        {{ value.last_read }}
+                    </td>
+                    <td class="py-1">
+                        {{ value.count_write}}
+                    </td>
+                    <td class="py-1">
+                        {{ value.last_write }}
+                    </td>
+                    <td class="py-1">
+                        <span class='badge bg-success'>{{ value.source }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <script>
+        new DataTable('#props_stat', {
+            order: [[5, 'desc']],
+            stateSave: true
+        });
+    </script>
+{% endblock %}
