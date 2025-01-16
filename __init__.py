@@ -15,6 +15,7 @@ class xray(BasePlugin):
         self.description = """Xray view system"""
         self.category = "System"
         self.author = "Eraser"
+        self.actions = ["widget"]
 
     def initialization(self):
         pass
@@ -114,3 +115,17 @@ class xray(BasePlugin):
             }
             return render_template("xray_cycles.html", **content)
             
+    def widget(self):
+        content = {}
+        services_count = 0
+        service_work = 0
+        for name,plugin in plugins.items():
+            if 'cycle' in plugin['instance'].actions:
+                services_count = services_count + 1
+                if plugin['instance'].is_alive():
+                    service_work = service_work + 1
+        content['services'] = {"count": services_count, "alive": service_work, "stopped": services_count - service_work}
+        from app.extensions import cache
+        content['cache_count'] = len(cache.cache._cache)
+        content['objects'] = len(objects_storage.items())
+        return render_template("widget_xray.html",**content)
