@@ -1,11 +1,14 @@
 r"""
 XRAY
 """
-
+from sqlalchemy import delete, update
+from app.database import row2dict, session_scope
 from app.core.main.BasePlugin import BasePlugin
 from flask import render_template, redirect
 from app.core.main.PluginsHelper import plugins
 from app.core.main.ObjectsStorage import objects_storage
+from app.core.models.Plugins import Notify
+from app.core.lib.constants import CategoryNotify
 class xray(BasePlugin):
 
     def __init__(self, app):
@@ -23,6 +26,23 @@ class xray(BasePlugin):
     def admin(self, request):
         tab = request.args.get("tab", "")
         op = request.args.get("op", None)
+        notify = request.args.get("notify", None)
+        
+        if notify:
+            if op == 'read':
+                from app.core.lib.common import readNotify
+                readNotify(notify)
+            elif op == 'unread':
+                with session_scope() as session:
+                    sql = update(Notify).where(Notify.id == notify).values(read=False)
+                    session.execute(sql)
+                    session.commit()
+            elif op == 'remove':
+                with session_scope() as session:
+                    sql = delete(Notify).where(Notify.id == notify)
+                    session.execute(sql)
+                    session.commit()
+            return redirect("xray?tab=notifications")
         
         if op == 'clear_cache':
             from app.extensions import cache
@@ -33,12 +53,26 @@ class xray(BasePlugin):
             objects_storage.clear()
             return redirect("xray?tab=objects")
         
+        if op == 'read_all':
+            with session_scope() as session:
+                sql = update(Notify).values(read=True)
+                session.execute(sql)
+                session.commit()
+            return redirect("xray?tab=notifications")
+        
+        if op == 'clear_notifications':
+            with session_scope() as session:
+                sql = delete(Notify)
+                session.execute(sql)
+                session.commit()
+            return redirect("xray?tab=notifications")
+
         if op == "remove":
             object = request.args.get("object", None)
             if object:
                 objects_storage.delObjectByName(object)
             return redirect("xray?tab=objects")
-        
+
         cycle = request.args.get("cycle", None)
         if cycle:
             if cycle in plugins:
@@ -99,6 +133,24 @@ class xray(BasePlugin):
                 "tab": tab,
             }
             return render_template("xray_methods.html", **content)
+        elif tab == "notifications":
+            notifications = Notify.query.order_by(Notify.created).all()
+            res = []
+            for rec in notifications:
+                item = row2dict(rec)
+                item['color'] = "danger"
+                if rec.category == CategoryNotify.Debug:
+                    item['color'] = "secondary"
+                elif rec.category == CategoryNotify.Warning:
+                    item['color'] = "warning"
+                elif rec.category == CategoryNotify.Info:
+                    item['color'] = "success"
+                res.append(item)
+            content = {
+                "notifications": res,
+                "tab": tab,
+            }
+            return render_template("xray_notifications.html", **content)
         else:
             values = {}
             for name,plugin in plugins.items():
