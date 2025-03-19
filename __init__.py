@@ -70,7 +70,7 @@ class xray(BasePlugin):
         if op == "remove":
             object = request.args.get("object", None)
             if object:
-                objects_storage.delObjectByName(object)
+                objects_storage.remove_object(object)
             return redirect("xray?tab=objects")
 
         cycle = request.args.get("cycle", None)
