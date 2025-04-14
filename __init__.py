@@ -84,7 +84,7 @@ class xray(BasePlugin):
         if op == 'drop_table':
             with session_scope() as session:
                 try:
-                    query = text(f"DROP FROM {table_name};")
+                    query = text(f"DROP TABLE {table_name};")
                     session.execute(query)
                     session.commit()
                     self.logger.info(f"✅ Table {table_name} droped")
