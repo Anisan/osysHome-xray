@@ -1,8 +1,8 @@
 r"""
 XRAY
 """
-from sqlalchemy import delete, update
-from app.database import row2dict, session_scope
+from sqlalchemy import delete, update, text
+from app.database import row2dict, session_scope, db
 from app.core.main.BasePlugin import BasePlugin
 from flask import render_template, redirect
 from app.core.main.PluginsHelper import plugins
@@ -66,6 +66,32 @@ class xray(BasePlugin):
                 session.execute(sql)
                 session.commit()
             return redirect("xray?tab=notifications")
+        
+        table_name = request.args.get("table", None)
+        if table_name:
+            table_name = f'"{table_name}"' if db.engine.dialect.name == 'postgresql' else f'`{table_name}`'
+        if op == 'clear_table':
+            with session_scope() as session:
+                try:
+                    query = text(f"DELETE FROM {table_name};")
+                    session.execute(query)
+                    session.commit()
+                    self.logger.info(f"✅ Table {table_name} cleared")
+                except Exception as e:
+                    session.rollback()
+                    self.logger.error(f"❌ Error clear table {table_name}: {e}")
+            return redirect("xray?tab=db")
+        if op == 'drop_table':
+            with session_scope() as session:
+                try:
+                    query = text(f"DROP FROM {table_name};")
+                    session.execute(query)
+                    session.commit()
+                    self.logger.info(f"✅ Table {table_name} droped")
+                except Exception as e:
+                    session.rollback()
+                    self.logger.error(f"❌ Error drop table {table_name}: {e}")
+            return redirect("xray?tab=db")
 
         if op == "remove":
             object = request.args.get("object", None)
@@ -151,6 +177,13 @@ class xray(BasePlugin):
                 "tab": tab,
             }
             return render_template("xray_notifications.html", **content)
+        elif tab == "db":
+            tables = self.__get_table_info()
+            content = {
+                "tables": tables,
+                "tab": tab,
+            }
+            return render_template("xray_db.html", **content)
         else:
             values = {}
             for name,plugin in plugins.items():
@@ -181,3 +214,101 @@ class xray(BasePlugin):
         content['cache_count'] = len(cache.cache._cache)
         content['objects'] = len(objects_storage.items())
         return render_template("widget_xray.html",**content)
+
+    def __get_table_info(self):
+        """
+        Получает список таблиц с количеством строк и размером таблиц.
+        Работает для PostgreSQL, MySQL и SQLite.
+        """
+        engine = db.engine
+        tables = []
+
+        # Получаем все таблицы, определённые в SQLAlchemy
+        sqlalchemy_tables = {}
+        for class_name, model in db.Model.registry._class_registry.items():
+            if hasattr(model, '__tablename__') and hasattr(model, '__table__'):
+                table_name = model.__tablename__
+                sqlalchemy_tables[table_name] = model.__module__.split(".")[1]
+
+        def format_size(size_bytes):
+            """
+            Преобразует размер в байтах в удобочитаемый формат (например, "2.5 MB", "10 KB").
+            """
+            if size_bytes == 0:
+                return "0 B"
+            
+            size_name = ("B", "KB", "MB", "GB", "TB")
+            i = 0
+            while size_bytes >= 1024 and i < len(size_name) - 1:
+                size_bytes /= 1024
+                i += 1
+            return f"{size_bytes:.2f} {size_name[i]}"
+
+        if engine.dialect.name == 'postgresql':
+            # Для PostgreSQL используем pg_total_relation_size для получения размера в байтах
+            query = text("""
+                SELECT 
+                    table_name,
+                    (xpath('/row/cnt/text()', xml_count))[1]::text::int AS row_count,
+                    pg_total_relation_size(quote_ident(table_name)) AS size_bytes
+                FROM (
+                    SELECT 
+                        table_name, 
+                        query_to_xml(format('SELECT COUNT(*) AS cnt FROM %I', table_name), false, true, '') AS xml_count
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                ) AS subquery;
+            """)
+            result = db.session.execute(query)
+            for row in result:
+                table_name = row.table_name
+                module = sqlalchemy_tables.get(table_name, 'Unknown')
+                tables.append({
+                    'table_name': table_name,
+                    'module': module,
+                    'row_count': row.row_count,
+                    'size': format_size(row.size_bytes)
+                })
+
+        elif engine.dialect.name == 'mysql':
+            # Для MySQL используем information_schema.tables для получения размера в байтах
+            query = text("""
+                SELECT 
+                    table_name,
+                    table_rows AS row_count,
+                    (data_length + index_length) AS size_bytes
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE();
+            """)
+            result = db.session.execute(query)
+            for row in result:
+                table_name = row.table_name
+                module = sqlalchemy_tables.get(table_name, 'Unknown')
+                tables.append({
+                    'table_name': table_name,
+                    'module': module,
+                    'row_count': row.row_count,
+                    'size': format_size(row.size_bytes)
+                })
+
+        elif engine.dialect.name == 'sqlite':
+            # Для SQLite используем PRAGMA table_info и COUNT(*)
+            query = text("SELECT name FROM sqlite_master WHERE type='table';")
+            result = db.session.execute(query)
+            for row in result:
+                table_name = row.name
+                module = sqlalchemy_tables.get(table_name, 'Unknown')
+                count_query = text(f"SELECT COUNT(*) AS row_count FROM {table_name};")
+                count_result = db.session.execute(count_query).scalar()
+                size_query = text("SELECT page_count * page_size AS size_bytes FROM pragma_page_count(), pragma_page_size();")
+                size_result = db.session.execute(size_query).scalar()
+                tables.append({
+                    'table_name': table_name,
+                    'module': module,
+                    'row_count': count_result,
+                    'size': format_size(size_result)
+                })
+
+        else:
+            raise NotImplementedError(f"Unsupported database dialect: {engine.dialect.name}")
+        return tables
