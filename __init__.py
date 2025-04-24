@@ -298,7 +298,7 @@ class xray(BasePlugin):
             for row in result:
                 table_name = row.name
                 module = sqlalchemy_tables.get(table_name, 'Unknown')
-                count_query = text(f"SELECT COUNT(*) AS row_count FROM {table_name};")
+                count_query = text(f"SELECT COUNT(*) AS row_count FROM '{table_name}';")
                 count_result = db.session.execute(count_query).scalar()
                 size_query = text("SELECT page_count * page_size AS size_bytes FROM pragma_page_count(), pragma_page_size();")
                 size_result = db.session.execute(size_query).scalar()
