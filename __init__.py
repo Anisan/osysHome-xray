@@ -2,7 +2,7 @@ r"""
 XRAY
 """
 from sqlalchemy import delete, update, text
-from app.database import row2dict, session_scope, db
+from app.database import row2dict, session_scope, db, convert_utc_to_local
 from app.core.main.BasePlugin import BasePlugin
 from flask import render_template, redirect
 from app.core.main.PluginsHelper import plugins
@@ -140,6 +140,8 @@ class xray(BasePlugin):
                         props[key + "." + name] = prop
                         props[key + "." + name]['object_id'] = obj['id']
                         props[key + "." + name]['description'] = obj['description'] if obj['description'] else obj['name']
+                        props[key + "." + name]['last_write'] = convert_utc_to_local(prop['last_write'])
+                        props[key + "." + name]['last_read'] = convert_utc_to_local(prop['last_read'])
             content = {
                 "props": props,
                 "tab": tab,
@@ -154,6 +156,8 @@ class xray(BasePlugin):
                         props[key + "." + name] = prop
                         props[key + "." + name]['object_id'] = obj['id']
                         props[key + "." + name]['description'] = obj['description'] if obj['description'] else obj['name']
+                        props[key + "." + name]['last_executed'] = convert_utc_to_local(prop['last_executed'])
+
             content = {
                 "methods": props,
                 "tab": tab,
@@ -191,7 +195,7 @@ class xray(BasePlugin):
                 if 'cycle' in plugin['instance'].actions:
                     values[name] = {
                         "active": plugin['instance'].is_alive(),
-                        "last_active": plugin['instance'].dtUpdated
+                        "last_active": convert_utc_to_local(plugin['instance'].dtUpdated)
                     } 
             content = {
                 "count": len(values),
