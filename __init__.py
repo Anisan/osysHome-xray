@@ -188,6 +188,13 @@ class xray(BasePlugin):
                 "tab": tab,
             }
             return render_template("xray_db.html", **content)
+        elif tab == "cleaner":
+            stats = objects_storage.getCleanerStat()
+            content = {
+                "stats": stats,
+                "tab": tab,
+            }
+            return render_template("xray_cleaner.html", **content)
         else:
             values = {}
             for name,plugin in plugins.items():
