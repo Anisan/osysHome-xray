@@ -1,0 +1,47 @@
+{% extends "xray_main.html" %}
+
+{% block tab %}
+<style>
+    .sorted-columns {
+      column-count: 1;
+      column-gap: 20px;
+      list-style-position: inside;
+      padding-left: 0;
+    }
+    
+    @media (min-width: 576px) { .sorted-columns { column-count: 2; } }
+    @media (min-width: 768px) { .sorted-columns { column-count: 3; } }
+    @media (min-width: 992px) { .sorted-columns { column-count: 4; } }
+    
+    .sorted-columns li {
+      break-inside: avoid; /* Предотвращает разрыв элементов между колонками */
+      page-break-inside: avoid; /* Для старых браузеров */
+    }
+</style>
+<div class="card px-3 pb-3 mb-1">
+    <h5 class="mt-3">Info</h5>
+    <span><b>{{_('Python info')}}: </b>{{python.info}}</span>
+    <span><b>{{_('Python version')}}: </b>{{python.version}}</span>
+    <span><b>{{_('Python executable')}}: </b>{{python.exec}}</span>
+    <span><b>{{_('Python path')}}: </b>{{python.path}}</span>
+    <span><b>{{_('Flask version')}}: </b>{{flask.version}}</span>
+    <span><b>{{_('Venv')}}: </b>{{venv.active}}</span>
+    <span><b>{{_('Venv path')}}: </b>{{venv.path}}</span>
+</div>
+<div class="card px-3 mb-1">
+    <h5 class="mt-3">Packages</h5>
+    <ul class="sorted-columns list-unstyled ">
+        {% for package in packages %}
+        <li class="col">{{package.name}}={{package.version}}</li>
+        {% endfor %}
+    </ul>
+</div>
+<div class="card p-3">
+<h6>Install package</h6>
+    <form action="" method="get">
+        <input type="hidden" name="op" value="install_package">
+        <input class="form-control" type="text" name="package" placeholder="Name package" required>
+        <button class="btn btn-primary mt-1" type="submit">Install</button>
+    </form>
+</div>
+{% endblock %}

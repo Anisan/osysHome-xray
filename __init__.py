@@ -1,6 +1,10 @@
 r"""
 XRAY
 """
+import sys
+import subprocess
+import platform
+import pkg_resources
 from sqlalchemy import delete, update, text
 from app.database import row2dict, session_scope, db, convert_utc_to_local
 from app.core.main.BasePlugin import BasePlugin
@@ -27,7 +31,7 @@ class xray(BasePlugin):
         tab = request.args.get("tab", "")
         op = request.args.get("op", None)
         notify = request.args.get("notify", None)
-        
+
         if notify:
             if op == 'read':
                 from app.core.lib.common import readNotify
@@ -43,30 +47,30 @@ class xray(BasePlugin):
                     session.execute(sql)
                     session.commit()
             return redirect("xray?tab=notifications")
-        
+
         if op == 'clear_cache':
             from app.extensions import cache
             cache.clear()
             return redirect("xray?tab=cache")
-        
+
         if op == 'clear_storage':
             objects_storage.clear()
             return redirect("xray?tab=objects")
-        
+
         if op == 'read_all':
             with session_scope() as session:
                 sql = update(Notify).values(read=True)
                 session.execute(sql)
                 session.commit()
             return redirect("xray?tab=notifications")
-        
+
         if op == 'clear_notifications':
             with session_scope() as session:
                 sql = delete(Notify)
                 session.execute(sql)
                 session.commit()
             return redirect("xray?tab=notifications")
-        
+
         table_name = request.args.get("table", None)
         if table_name:
             table_name = f'"{table_name}"' if db.engine.dialect.name == 'postgresql' else f'`{table_name}`'
@@ -99,6 +103,19 @@ class xray(BasePlugin):
                 objects_storage.remove_object(object)
             return redirect("xray?tab=objects")
 
+        if op == "install_package":
+            package = request.args.get("package", None)
+            if not package:
+                return redirect("xray?tab=system")
+
+            try:
+                subprocess.run([sys.executable, '-m', 'pip', 'install', package], check=True)
+                self.logger.info(f"Installed package '{package}'!")
+            except subprocess.CalledProcessError as e:
+                self.logger.exception(e)
+
+            return redirect("xray?tab=system")
+
         cycle = request.args.get("cycle", None)
         if cycle:
             if cycle in plugins:
@@ -110,7 +127,7 @@ class xray(BasePlugin):
                     plugin['instance'].start_cycle()
                 if op == 'stop':
                     plugin['instance'].stop_cycle()
-                    
+
             return redirect("xray?tab=")
 
         if tab == "cache":
@@ -195,6 +212,26 @@ class xray(BasePlugin):
                 "tab": tab,
             }
             return render_template("xray_cleaner.html", **content)
+        elif tab == "system":
+            packs = self.get_installed_packages()
+            content = {
+                'packages': packs,
+                'python': {
+                    'info': sys.version,
+                    'version': platform.python_version(),
+                    'exec': sys.executable,
+                    'path': sys.prefix
+                },
+                'flask': {
+                    'version': pkg_resources.get_distribution("flask").version if 'flask' in {pkg.key for pkg in pkg_resources.working_set} else 'Not install',
+                },
+                'venv': {
+                    'active': True if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix) else False,
+                    'path': sys.prefix
+                },
+                'tab': tab,
+            }
+            return render_template("xray_system.html", **content)
         else:
             values = {}
             for name,plugin in plugins.items():
@@ -203,14 +240,31 @@ class xray(BasePlugin):
                     values[name] = {
                         "active": plugin['instance'].is_alive(),
                         "last_active": convert_utc_to_local(plugin['instance'].dtUpdated)
-                    } 
+                    }
             content = {
                 "count": len(values),
                 "cycles": values,
                 "tab": tab,
             }
             return render_template("xray_cycles.html", **content)
-            
+
+    def get_installed_packages(self):
+        try:
+            packages = []
+            # for dist in pkg_resources.working_set:
+            #     packages.append({'name': dist.project_name, 'version': dist.version})
+            # packages = sorted(packages, key=lambda x: x["name"])
+            result = subprocess.run([sys.executable, '-m', 'pip', 'list', '--format=freeze'], capture_output=True, text=True)
+            packages = []
+            for line in result.stdout.split('\n'):
+                if line.strip():
+                    name, version = line.split('==') if '==' in line else (line.strip(), '?')
+                    packages.append({'name': name, 'version': version})
+            return packages
+        except Exception as e:
+            self.logger.exception(e)
+            return []
+
     def widget(self):
         content = {}
         services_count = 0
@@ -247,7 +301,7 @@ class xray(BasePlugin):
             """
             if size_bytes == 0:
                 return "0 B"
-            
+
             size_name = ("B", "KB", "MB", "GB", "TB")
             i = 0
             while size_bytes >= 1024 and i < len(size_name) - 1:
