@@ -4,6 +4,149 @@
 <link rel="stylesheet" href="/xray/static/css/dataTables.dataTables.css">
 <script src="/xray/static/js/dataTables.js"></script>
 <script src="/xray/static/js/file-size.js"></script>
+<div class="container">  
+    <h4>Database Pool Monitoring</h4>  
+     <!-- Основные метрики -->   
+    <div class="row">  
+        <div class="col-md-4">  
+            <div class="card text-center">  
+                <div class="card-body">  
+                    <h5 class="card-title">Active Connections</h5>  
+                    <h2 id="active-connections" class="text-primary">-</h2>  
+                    <small id="pool-usage" class="text-muted">-</small>  
+                </div>  
+            </div>  
+        </div>  
+        <div class="col-md-4">  
+            <div class="card text-center">  
+                <div class="card-body">  
+                    <h5 class="card-title">Pool Health</h5>  
+                    <h2 id="health-score" class="text-success">-</h2>  
+                    <small id="health-status" class="text-muted">-</small>  
+                </div>  
+            </div>  
+        </div>  
+        <div class="col-md-4">  
+            <div class="card text-center">  
+                <div class="card-body">  
+                    <h5 class="card-title">Overflow</h5>  
+                    <h2 id="overflow" class="text-primary">-</h2>  
+                    <small id="overflow-usage" class="text-muted">-</small>  
+                </div>  
+            </div>  
+        </div>  
+    </div>
+    <!-- Графики -->  
+    <div class="row mt-4">  
+        <div class="col-md-12">  
+            <div class="card">  
+                <div class="card-header">Pool Usage History</div>  
+                <div class="card-body">  
+                    <canvas id="poolHistoryChart" height="100"></canvas>  
+                </div>  
+            </div>  
+        </div>  
+    </div>  
+
+</div>  
+  
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  
+<script>  
+let poolChart;
+function updatePoolStats() {  
+    fetch('/api/xray/database/pool/stats')  
+        .then(response => response.json())  
+        .then(data => {  
+            document.getElementById('active-connections').textContent = data.active_connections;  
+            document.getElementById('pool-usage').textContent = `${data.pool_usage_percent}% of ${data.pool_size}`;  
+            document.getElementById('overflow').textContent = data.overflow;  
+            document.getElementById('overflow-usage').textContent = `${data.overflow_usage_percent}%`;  
+        });
+        // Получаем показатели здоровья  
+    fetch('/api/xray/database/pool/health')  
+        .then(response => response.json())  
+        .then(data => {  
+            const healthScore = document.getElementById('health-score');  
+            const healthStatus = document.getElementById('health-status');  
+              
+            healthScore.textContent = data.health_score;  
+            healthStatus.textContent = data.status;  
+              
+            // Цвета для статуса  
+            healthScore.className = data.status === 'healthy' ? 'text-success' :   
+                                   data.status === 'warning' ? 'text-warning' : 'text-danger';  
+              
+            // Предупреждения  
+            const warningsList = document.getElementById('warnings-list');  
+            warningsList.innerHTML = data.warnings.map(w =>   
+                `<li class="text-warning"><i class="fas fa-exclamation-triangle"></i> ${w}</li>`  
+            ).join('');  
+              
+            // Рекомендации  
+            const recommendationsList = document.getElementById('recommendations-list');  
+            recommendationsList.innerHTML = data.recommendations.map(r =>   
+                `<li class="text-info"><i class="fas fa-lightbulb"></i> ${r}</li>`  
+            ).join('');  
+        }); 
+    updatePoolHistoryChart();
+}  
+function updatePoolHistoryChart() {  
+    fetch('/api/xray/database/pool/history')  
+        .then(response => response.json())  
+        .then(data => {  
+            const ctx = document.getElementById('poolHistoryChart').getContext('2d');  
+              
+            if (poolChart) {  
+                poolChart.destroy();  
+            }  
+              
+            const labels = data.history.map(h => new Date(h.timestamp * 1000).toLocaleTimeString());  
+              
+            poolChart = new Chart(ctx, {  
+                type: 'line',  
+                data: {  
+                    labels: labels,  
+                    datasets: [{  
+                        label: 'Active Connections',  
+                        data: data.history.map(h => h.active_connections),  
+                        borderColor: 'rgb(75, 192, 192)',  
+                        tension: 0.1  
+                    }, {  
+                        label: 'Usage %',  
+                        data: data.history.map(h => h.usage_percent),  
+                        borderColor: 'rgb(255, 99, 132)',  
+                        tension: 0.1,  
+                        yAxisID: 'y1'  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    scales: {  
+                        y: {  
+                            type: 'linear',  
+                            display: true,  
+                            position: 'left',  
+                        },  
+                        y1: {  
+                            type: 'linear',  
+                            display: true,  
+                            position: 'right',  
+                            max: 100,  
+                            grid: {  
+                                drawOnChartArea: false,  
+                            },  
+                        }  
+                    }  
+                }  
+            });  
+        });  
+}  
+  
+// Обновляем статистику каждые 30 секунд  
+setInterval(updatePoolStats, 30000);  
+updatePoolStats();  
+</script>
+
 <div class="table-responsive">
     <table id="dbtables" class="table table-hover table-striped">
         <thead>

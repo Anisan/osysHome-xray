@@ -13,6 +13,9 @@ from app.core.main.PluginsHelper import plugins
 from app.core.main.ObjectsStorage import objects_storage
 from app.core.models.Plugins import Notify
 from app.core.lib.constants import CategoryNotify
+from app.api import api
+from plugins.xray.utils.pool_monitor import DatabasePoolMonitor
+
 class xray(BasePlugin):
 
     def __init__(self, app):
@@ -24,8 +27,30 @@ class xray(BasePlugin):
         self.author = "Eraser"
         self.actions = ["widget"]
 
+        from plugins.xray.api import create_api_ns
+        api_ns = create_api_ns(self)
+        api.add_namespace(api_ns, path="/xray")
+
     def initialization(self):
-        pass
+        from app.database import engine
+        self._pool_monitor = DatabasePoolMonitor(engine, self.logger)
+        interval = 5
+        from settings import Config
+        if Config.DEBUG:
+            interval = 1
+        self._pool_monitor.start_monitoring(interval)
+
+    def get_pool_stats(self):
+        """API для получения текущей статистики пула"""
+        if self._pool_monitor:
+            return self._pool_monitor.get_pool_stats()
+        return None
+
+    def get_pool_history(self, minutes: int = 60):
+        """API для получения истории статистики пула"""
+        if self._pool_monitor:
+            return self._pool_monitor.get_stats_history(minutes)
+        return []
 
     def admin(self, request):
         tab = request.args.get("tab", "")
