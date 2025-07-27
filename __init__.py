@@ -199,6 +199,7 @@ class xray(BasePlugin):
                         props[key + "." + name]['object_id'] = obj['id']
                         props[key + "." + name]['description'] = obj['description'] if obj['description'] else obj['name']
                         props[key + "." + name]['last_executed'] = convert_utc_to_local(prop['last_executed'])
+                        props[key + "." + name]['exec_time'] = prop['exec_time']
 
             content = {
                 "methods": props,
