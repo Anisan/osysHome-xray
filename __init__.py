@@ -231,6 +231,9 @@ class xray(BasePlugin):
                 "tab": tab,
             }
             return render_template("xray_db.html", **content)
+        elif tab == "thread_pools":
+            content = {"tab": tab}
+            return render_template("xray_thread_pools.html", **content)
         elif tab == "cleaner":
             stats = objects_storage.getCleanerStat()
             content = {
@@ -258,6 +261,11 @@ class xray(BasePlugin):
                 'tab': tab,
             }
             return render_template("xray_system.html", **content)
+        elif tab == "analytics":
+            content = {
+                "tab": tab,
+            }
+            return render_template("xray_analytics.html", **content)
         else:
             values = {}
             for name,plugin in plugins.items():
@@ -338,13 +346,13 @@ class xray(BasePlugin):
         if engine.dialect.name == 'postgresql':
             # Для PostgreSQL используем pg_total_relation_size для получения размера в байтах
             query = text("""
-                SELECT 
+                SELECT
                     table_name,
                     (xpath('/row/cnt/text()', xml_count))[1]::text::int AS row_count,
                     pg_total_relation_size(quote_ident(table_name)) AS size_bytes
                 FROM (
-                    SELECT 
-                        table_name, 
+                    SELECT
+                        table_name,
                         query_to_xml(format('SELECT COUNT(*) AS cnt FROM %I', table_name), false, true, '') AS xml_count
                     FROM information_schema.tables
                     WHERE table_schema = 'public'
@@ -364,7 +372,7 @@ class xray(BasePlugin):
         elif engine.dialect.name == 'mysql':
             # Для MySQL используем information_schema.tables для получения размера в байтах
             query = text("""
-                SELECT 
+                SELECT
                     table_name,
                     table_rows AS row_count,
                     (data_length + index_length) AS size_bytes

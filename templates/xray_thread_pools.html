@@ -1,0 +1,200 @@
+{% extends "xray_main.html" %}  
+  
+{% block tab %}  
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  
+<div class="container">  
+    <h4>Thread Pools Monitoring</h4>  
+      
+    <!-- Метрики для 4 пулов -->  
+    <div class="row" id="pools-metrics">  
+        <!-- Динамически заполняется JavaScript -->  
+    </div>  
+      
+    <!-- Графики -->  
+    <div class="row mt-4">  
+        <div class="col-md-6">  
+            <div class="card">  
+                <div class="card-header">Pool Utilization</div>  
+                <div class="card-body">  
+                    <canvas id="utilizationChart" height="200"></canvas>  
+                </div>  
+            </div>  
+        </div>  
+        <div class="col-md-6">  
+            <div class="card">  
+                <div class="card-header">Execution Times</div>  
+                <div class="card-body">  
+                    <canvas id="executionChart" height="200"></canvas>  
+                </div>  
+            </div>  
+        </div>  
+    </div>  
+      
+    <!-- История задач -->  
+    <div class="row mt-4">  
+        <div class="col-md-12">  
+            <div class="card">  
+                <div class="card-header">Recent Tasks</div>  
+                <div class="card-body">  
+                    <div class="table-responsive">  
+                        <table id="tasksTable" class="table table-hover table-striped">  
+                            <thead>  
+                                <tr>  
+                                    <th>Pool</th>  
+                                    <th>Task Name</th>  
+                                    <th>Duration</th>  
+                                    <th>Status</th>  
+                                    <th>Time</th>  
+                                </tr>  
+                            </thead>  
+                            <tbody id="tasks-tbody">  
+                            </tbody>  
+                        </table>  
+                    </div>  
+                </div>  
+            </div>  
+        </div>  
+    </div>  
+</div>  
+  
+<script>  
+let utilizationChart, executionChart;  
+  
+function updateThreadPoolsStats() {  
+    fetch('/api/xray/thread_pools/stats')  
+        .then(response => response.json())  
+        .then(data => {  
+            updatePoolsMetrics(data);  
+            updateCharts(data);  
+            updateTasksTable(data);  
+        })  
+        .catch(error => console.error('Error:', error));  
+}  
+  
+function updatePoolsMetrics(data) {  
+    const container = document.getElementById('pools-metrics');  
+    container.innerHTML = '';  
+      
+    Object.entries(data).forEach(([poolName, poolData]) => {  
+        const col = document.createElement('div');  
+        col.className = 'col-md-3 mb-3';  
+          
+        const statusClass = poolData.thread_pool.pool_utilization > 80 ? 'text-danger' :   
+                           poolData.thread_pool.pool_utilization > 60 ? 'text-warning' : 'text-success';  
+          
+        col.innerHTML = `  
+            <div class="card text-center">  
+                <div class="card-body">  
+                    <h6 class="card-title">${poolName}</h6>  
+                    <h4 class="${statusClass}">${poolData.thread_pool.active_tasks|length}/${poolData.thread_pool.max_workers}</h4>  
+                    <small class="text-muted">${poolData.thread_pool.pool_utilization.toFixed(1)}% utilization</small>  
+                    <div class="mt-2">  
+                        <small>Completed: ${poolData.thread_pool.completed_tasks}</small><br>  
+                        <small>Failed: ${poolData.thread_pool.failed_tasks}</small><br>  
+                        <small>Queue: ${poolData.thread_pool.queue_size}</small>  
+                    </div>  
+                </div>  
+            </div>  
+        `;  
+        container.appendChild(col);  
+    });  
+}  
+
+function getGreenIntensity(value) {  
+    // Зеленый цвет с яркостью от 0.3 до 1.0 в зависимости от значения  
+    const intensity = 0.3 + (value / 100) * 0.7; // 0.3 to 1.0  
+    return `rgba(40, 167, 69, ${intensity})`;  
+}  
+  
+function getRedIntensity(value) {  
+    // Красный цвет с яркостью от 0.3 до 1.0 в зависимости от значения  
+    const intensity = 0.3 + (value / 100) * 0.7; // 0.3 to 1.0  
+    return `rgba(220, 53, 69, ${intensity})`;  
+}  
+  
+function updateCharts(data) {  
+    // График утилизации  
+    const utilizationCtx = document.getElementById('utilizationChart').getContext('2d');  
+    if (utilizationChart) utilizationChart.destroy();  
+      
+    const poolNames = Object.keys(data);  
+    const utilizationData = poolNames.map(name => data[name].thread_pool.pool_utilization);
+    const maxUtilizationData = poolNames.map(name => data[name].thread_pool.max_concurrent_tasks / data[name].thread_pool.max_workers * 100);  
+      
+    utilizationChart = new Chart(utilizationCtx, {  
+        type: 'bar',  
+        data: {  
+            labels: poolNames,  
+            datasets: [{  
+                label: 'Pool Utilization %',  
+                data: utilizationData,  
+                backgroundColor: utilizationData.map(val => getGreenIntensity(val))  
+            }, {  
+                label: 'Max Pool Utilization %',  
+                data: maxUtilizationData,  
+                backgroundColor: maxUtilizationData.map(val => getRedIntensity(val))  
+            }]   
+        },  
+        options: {  
+            responsive: true,  
+            scales: {  
+                y: { beginAtZero: true, max: 100 }  
+            }  
+        }  
+    });  
+      
+    // График времени выполнения  
+    const executionCtx = document.getElementById('executionChart').getContext('2d');  
+    if (executionChart) executionChart.destroy();  
+      
+    const avgTimes = poolNames.map(name => data[name].execution_time.avg_execution_time * 1000);  
+    const maxTimes = poolNames.map(name => data[name].execution_time.max_execution_time * 1000);  
+      
+    executionChart = new Chart(executionCtx, {  
+        type: 'line',  
+        data: {  
+            labels: poolNames,  
+            datasets: [{  
+                label: 'Avg Execution Time (ms)',  
+                data: avgTimes,  
+                borderColor: 'rgb(75, 192, 192)',  
+                tension: 0.1  
+            }, {  
+                label: 'Max Execution Time (ms)',  
+                data: maxTimes,  
+                borderColor: 'rgb(255, 99, 132)',  
+                tension: 0.1  
+            }]  
+        },  
+        options: {  
+            responsive: true,  
+            scales: { y: { beginAtZero: true } }  
+        }  
+    });  
+}  
+  
+function updateTasksTable(data) {  
+    const tbody = document.getElementById('tasks-tbody');  
+    tbody.innerHTML = '';  
+      
+    Object.entries(data).forEach(([poolName, poolData]) => {  
+        if (poolData.history) {  
+            poolData.history.slice(-20).forEach(task => {  
+                const row = tbody.insertRow();  
+                row.innerHTML = `  
+                    <td><span class="badge bg-primary">${poolName}</span></td>  
+                    <td>${task.task_name}</td>  
+                    <td>${(task.duration * 1000).toFixed(2)}ms</td>  
+                    <td><span class="badge ${task.success ? 'bg-success' : 'bg-danger'}">${task.success ? 'Success' : 'Failed'}</span></td>  
+                    <td>${task.time}</td>  
+                `;  
+            });  
+        }  
+    });  
+}  
+  
+// Обновление каждые 30 секунд  
+setInterval(updateThreadPoolsStats, 30000);  
+updateThreadPoolsStats();  
+</script>  
+{% endblock %}

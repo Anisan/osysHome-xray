@@ -1,0 +1,520 @@
+{% extends "xray_main.html" %}  
+  
+{% block tab %}  
+<div id="analytics-app">  
+    <div class="container-fluid">  
+        <div class="d-flex justify-content-between align-items-center mb-3">  
+            <h4>Real-time Usage Analytics</h4>  
+            <div>  
+                <span class="badge" :class="isLoading ? 'bg-warning' : 'bg-success'">  
+                    [[ isLoading ? 'Updating...' : 'Live' ]]
+                </span>  
+                <small class="text-muted ms-2">Last update: [[ lastUpdate ]]</small>  
+            </div>  
+        </div>  
+          
+        <!-- Первый ряд - основные диаграммы -->  
+        <div class="row mb-4">  
+            <div class="col-md-4">  
+                <div class="card">  
+                    <div class="card-header">Objects Usage</div>  
+                    <div class="card-body">  
+                        <canvas ref="objectsChart" height="200"></canvas>  
+                    </div>  
+                </div>  
+            </div>  
+              
+            <div class="col-md-4">  
+                <div class="card">  
+                    <div class="card-header">Top Methods</div>  
+                    <div class="card-body">  
+                        <canvas ref="methodsChart" height="200"></canvas>  
+                    </div>  
+                </div>  
+            </div>  
+              
+            <div class="col-md-4">  
+                <div class="card">  
+                    <div class="card-header">Top Slow Methods</div>  
+                    <div class="card-body">  
+                        <canvas ref="methodsSlowChart" height="200"></canvas>  
+                    </div>  
+                </div>  
+            </div>  
+        </div>  
+          
+        <!-- Второй ряд - временная аналитика -->  
+        <div class="row mb-4">  
+            <div class="col-md-6">  
+                <div class="card">  
+                    <div class="card-header">Activity Timeline</div>  
+                    <div class="card-body">  
+                        <canvas ref="timeChart" height="200"></canvas>  
+                    </div>  
+                </div>  
+            </div>  
+              
+            <div class="col-md-6">  
+                <div class="card">  
+                    <div class="card-header">Performance Distribution</div>  
+                    <div class="card-body">  
+                        <canvas ref="performanceChart" height="200"></canvas>  
+                    </div>  
+                </div>  
+            </div>  
+        </div>  
+          
+        <!-- Третий ряд - источники и дополнительная аналитика -->  
+        <div class="row mb-4">  
+            <div class="col-md-6">  
+                <div class="card">  
+                    <div class="card-header">Data Sources</div>  
+                    <div class="card-body">  
+                        <canvas ref="sourcesChart" height="200"></canvas>  
+                    </div>  
+                </div>  
+            </div>  
+              
+            <div class="col-md-6">  
+                <div class="card">  
+                    <div class="card-header">System Health</div>  
+                    <div class="card-body">  
+                        <canvas ref="healthChart" height="200"></canvas>  
+                    </div>  
+                </div>  
+            </div>  
+        </div>  
+    </div>  
+</div>  
+  
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>  
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  
+<script>  
+const { createApp } = Vue;  
+  
+createApp({  
+    delimiters: ['[[', ']]'],
+    data() {  
+        return {  
+            rawStats: {},  
+            charts: {},  
+            isLoading: false,  
+            lastUpdate: '',  
+            updateInterval: null,  
+              
+            // Вычисляемые данные аналитики  
+            objectsData: {},  
+            propertiesData: { read: 0, write: 0 },  
+            methodsData: {},  
+            timeAnalytics: { last_hour: 0, last_day: 0, last_week: 0, older: 0 },  
+            performanceAnalytics: { high_load: [], medium_load: [], low_load: [] },  
+            sourceAnalytics: {}  
+        }  
+    },  
+      
+    mounted() {  
+        this.fetchData();  
+        this.startPeriodicUpdate();  
+    },  
+      
+    beforeUnmount() {  
+        this.stopPeriodicUpdate();  
+        this.destroyCharts();  
+    },  
+      
+    methods: {  
+        async fetchData() {  
+            this.isLoading = true;  
+            try {  
+                const response = await fetch('/api/xray/analytics/stats');  
+                const data = await response.json();  
+                  
+                this.rawStats = data.stats;  
+                this.calculateAnalytics();  
+                this.updateCharts();  
+                this.lastUpdate = new Date().toLocaleTimeString();  
+                  
+            } catch (error) {  
+                console.error('Error fetching analytics data:', error);  
+            } finally {  
+                this.isLoading = false;  
+            }  
+        },  
+          
+        calculateAnalytics() {  
+            // Сброс данных  
+            this.objectsData = {};  
+            this.propertiesData = { read: 0, write: 0 };  
+            this.methodsData = {};  
+            this.timeAnalytics = { last_hour: 0, last_day: 0, last_week: 0, older: 0 };  
+            this.performanceAnalytics = { high_load: [], medium_load: [], low_load: [] };  
+            this.sourceAnalytics = {};  
+              
+            const now = new Date();  
+              
+            for (const [key, obj] of Object.entries(this.rawStats)) {  
+                if (!obj || typeof obj !== 'object') continue;  
+
+                const objName = obj.name || obj.description || key;  
+                  
+                var count_read = 0
+                var count_write = 0
+                var count_exec = 0
+                // Анализ свойств  
+                const statProperties = obj.stat_properties || {};  
+                for (const [propName, prop] of Object.entries(statProperties)) {  
+                    if (prop && typeof prop === 'object') {  
+                        this.propertiesData.read += prop.count_read || 0;  
+                        this.propertiesData.write += prop.count_write || 0;  
+                        count_read += prop.count_read || 0
+                        count_write += prop.count_write || 0
+                        // Временной анализ  
+                        if (prop.last_write) {  
+                            const lastWrite = new Date(prop.last_write);  
+                            const diff = now - lastWrite;  
+                            const hours = diff / (1000 * 60 * 60);  
+                              
+                            if (hours <= 1) {  
+                                this.timeAnalytics.last_hour++;  
+                            } else if (hours <= 24) {  
+                                this.timeAnalytics.last_day++;  
+                            } else if (hours <= 168) { // 7 days  
+                                this.timeAnalytics.last_week++;  
+                            } else {  
+                                this.timeAnalytics.older++;  
+                            }  
+                        }  
+                          
+                        // Анализ источников  
+                        const source = prop.source || 'unknown';  
+                        if (!this.sourceAnalytics[source]) {  
+                            this.sourceAnalytics[source] = { properties: 0, methods: 0 };  
+                        }  
+                        this.sourceAnalytics[source].properties++;  
+                    }  
+                }  
+                  
+                // Анализ методов  
+                const statMethods = obj.stat_methods || {};  
+                for (const [methodName, method] of Object.entries(statMethods)) {  
+                    if (method && typeof method === 'object') {  
+                        const methodKey = `${objName}.${methodName}`;  
+                        const countExecuted = method.count_executed || 0; 
+                        const timeExecuted = method.exec_time || 0;
+                        count_exec += countExecuted
+                        if (countExecuted > 0) {  
+                            this.methodsData[methodKey] = [countExecuted, timeExecuted];  
+                        }  
+                          
+                        // Анализ источников методов  
+                        const source = method.source || 'unknown';  
+                        if (!this.sourceAnalytics[source]) {  
+                            this.sourceAnalytics[source] = { properties: 0, methods: 0 };  
+                        }  
+                        this.sourceAnalytics[source].methods++;  
+                    }  
+                }  
+
+                                 
+                // Расчет операций объектов  
+                const totalOps = obj.count_get + count_read + count_write + count_exec;
+                  
+                if (totalOps > 0) {  
+                    this.objectsData[objName] = totalOps;  
+                      
+                    // Анализ производительности  
+                    if (totalOps > 1000) {  
+                        this.performanceAnalytics.high_load.push({ name: objName, ops: totalOps });  
+                    } else if (totalOps > 100) {  
+                        this.performanceAnalytics.medium_load.push({ name: objName, ops: totalOps });  
+                    } else {  
+                        this.performanceAnalytics.low_load.push({ name: objName, ops: totalOps });  
+                    }  
+                }  
+                  
+                
+            }  
+        },  
+          
+        updateCharts() {  
+            this.updateObjectsChart();  
+            //this.updatePropertiesChart();  
+            this.updateMethodsChart();  
+            this.updateSlowMethodsChart()
+            this.updateTimeChart();  
+            this.updatePerformanceChart();  
+            this.updateSourcesChart();  
+            this.updateHealthChart();
+        },  
+          
+        updateObjectsChart() {  
+            const ctx = this.$refs.objectsChart.getContext('2d');  
+              
+            if (this.charts.objects) {  
+                this.charts.objects.destroy();  
+            }  
+              
+            this.charts.objects = new Chart(ctx, {  
+                type: 'pie',  
+                data: {  
+                    labels: Object.keys(this.objectsData),  
+                    datasets: [{  
+                        data: Object.values(this.objectsData),  
+                        backgroundColor: [  
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',  
+                            '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF'  
+                        ]  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'Total Operations per Object' }  
+                    }  
+                }  
+            });  
+        },  
+          
+        updatePropertiesChart() {  
+            const ctx = this.$refs.propertiesChart.getContext('2d');  
+              
+            if (this.charts.properties) {  
+                this.charts.properties.destroy();  
+            }  
+              
+            this.charts.properties = new Chart(ctx, {  
+                type: 'doughnut',  
+                data: {  
+                    labels: ['Read Operations', 'Write Operations'],  
+                    datasets: [{  
+                        data: [this.propertiesData.read, this.propertiesData.write],  
+                        backgroundColor: ['#36A2EB', '#FF6384']  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'Properties Read/Write Ratio' }  
+                    }  
+                }  
+            });  
+        },  
+          
+        updateMethodsChart() {  
+            const ctx = this.$refs.methodsChart.getContext('2d');  
+              
+            if (this.charts.methods) {  
+                this.charts.methods.destroy();  
+            }  
+              
+            const sortedMethods = Object.entries(this.methodsData)  
+                .sort(([,a], [,b]) => b[0] - a[0])  
+                .slice(0, 10);  
+              
+            this.charts.methods = new Chart(ctx, {  
+                type: 'doughnut',  
+                data: {  
+                    labels: sortedMethods.map(([name]) => name),  
+                    datasets: [{  
+                        data: sortedMethods.map(([, count]) => count[0]),  
+                        backgroundColor: [  
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',  
+                            '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',  
+                            '#4BC0C0', '#9966FF'  
+                        ]  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'Top 10 Most Executed Methods' }  
+                    }  
+                }  
+            });  
+        },  
+        updateSlowMethodsChart() {  
+            const ctx = this.$refs.methodsSlowChart.getContext('2d');  
+              
+            if (this.charts.methodsSlow) {  
+                this.charts.methodsSlow.destroy();  
+            }  
+              
+            const sortedMethods = Object.entries(this.methodsData)  
+                .sort(([,a], [,b]) => b[1] - a[1])  
+                .slice(0, 10);  
+              
+            this.charts.methodsSlow = new Chart(ctx, {  
+                type: 'doughnut',  
+                data: {  
+                    labels: sortedMethods.map(([name]) => name),  
+                    datasets: [{  
+                        data: sortedMethods.map(([, count]) => count[1]),  
+                        backgroundColor: [  
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',  
+                            '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',  
+                            '#4BC0C0', '#9966FF'  
+                        ]  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'Top 10 Most Slow Executed Methods' }  
+                    }  
+                }  
+            });  
+        },  
+          
+        updateTimeChart() {  
+            const ctx = this.$refs.timeChart.getContext('2d');  
+              
+            if (this.charts.time) {  
+                this.charts.time.destroy();  
+            }  
+              
+            this.charts.time = new Chart(ctx, {  
+                type: 'doughnut',  
+                data: {  
+                    labels: ['Last Hour', 'Last Day', 'Last Week', 'Older'],  
+                    datasets: [{  
+                        data: [  
+                            this.timeAnalytics.last_hour,  
+                            this.timeAnalytics.last_day,  
+                            this.timeAnalytics.last_week,  
+                            this.timeAnalytics.older  
+                        ],  
+                        backgroundColor: ['#28a745', '#ffc107', '#fd7e14', '#6c757d']  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'Activity by Time Period' }  
+                    }  
+                }  
+            });  
+        },  
+          
+        updatePerformanceChart() {  
+            const ctx = this.$refs.performanceChart.getContext('2d');  
+              
+            if (this.charts.performance) {  
+                this.charts.performance.destroy();  
+            }  
+              
+            this.charts.performance = new Chart(ctx, {  
+                type: 'pie',  
+                data: {  
+                    labels: ['High Load (>1000)', 'Medium Load (100-1000)', 'Low Load (<100)'],  
+                    datasets: [{  
+                        data: [  
+                            this.performanceAnalytics.high_load.length,  
+                            this.performanceAnalytics.medium_load.length,  
+                            this.performanceAnalytics.low_load.length  
+                        ],  
+                        backgroundColor: ['#dc3545', '#ffc107', '#28a745']  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'Objects by Load Level' }  
+                    }  
+                }  
+            });  
+        },  
+          
+        updateSourcesChart() {  
+            const ctx = this.$refs.sourcesChart.getContext('2d');  
+              
+            if (this.charts.sources) {  
+                this.charts.sources.destroy();  
+            }  
+              
+            const sourceLabels = Object.keys(this.sourceAnalytics);  
+            const sourceData = sourceLabels.map(source =>   
+                this.sourceAnalytics[source].properties + this.sourceAnalytics[source].methods  
+            );  
+              
+            this.charts.sources = new Chart(ctx, {  
+                type: 'doughnut',  
+                data: {  
+                    labels: sourceLabels,  
+                    datasets: [{  
+                        data: sourceData,  
+                        backgroundColor: ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1']  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'Data Sources Distribution' }  
+                    }  
+                }  
+            });  
+        },  
+        updateHealthChart() {  
+            const ctx = this.$refs.healthChart.getContext('2d');  
+            
+            if (this.charts.health) {  
+                this.charts.health.destroy();  
+            }  
+            
+            const totalObjects = Object.keys(this.objectsData).length;  
+            const activeObjects = Object.values(this.objectsData).filter(val => val > 0).length;  
+            const inactiveObjects = totalObjects - activeObjects;  
+            const totalMethods = Object.keys(this.methodsData).length;  
+            const totalProperties = this.propertiesData.read + this.propertiesData.write;  
+            
+            this.charts.health = new Chart(ctx, {  
+                type: 'pie',  
+                data: {  
+                    labels: ['Active Objects', 'Inactive Objects', 'Total Methods', 'Total Properties'],  
+                    datasets: [{  
+                        data: [activeObjects, inactiveObjects, totalMethods, totalProperties],  
+                        backgroundColor: ['#28a745', '#6c757d', '#17a2b8', '#ffc107']  
+                    }]  
+                },  
+                options: {  
+                    responsive: true,  
+                    plugins: {  
+                        legend: { position: 'bottom' },  
+                        title: { display: true, text: 'System Health Overview' }  
+                    }  
+                }  
+            });  
+        },
+                
+        startPeriodicUpdate() {  
+            // Обновляем данные каждые 30 секунд, как в существующей системе  
+            this.updateInterval = setInterval(() => {  
+                this.fetchData();  
+            }, 30000);  
+        },  
+          
+        stopPeriodicUpdate() {  
+            if (this.updateInterval) {  
+                clearInterval(this.updateInterval);  
+                this.updateInterval = null;  
+            }  
+        },  
+          
+        destroyCharts() {  
+            Object.values(this.charts).forEach(chart => {  
+                if (chart) {  
+                    chart.destroy();  
+                }  
+            });  
+            this.charts = {};  
+        }  
+    }  
+}).mount('#analytics-app');  
+</script>  
+{% endblock %}
