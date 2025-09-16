@@ -35,7 +35,7 @@ class xray(BasePlugin):
         from app.database import engine
         self._pool_monitor = DatabasePoolMonitor(engine, self.logger)
         interval = 5
-        from settings import Config
+        from app.configuration import Config
         if Config.DEBUG:
             interval = 1
         self._pool_monitor.start_monitoring(interval)
