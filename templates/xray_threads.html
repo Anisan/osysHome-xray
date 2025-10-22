@@ -1,0 +1,49 @@
+{% extends "xray_main.html" %}
+
+{% block tab %}
+    Count items: {{ threads|length }}
+    <link rel="stylesheet" href="/xray/static/css/dataTables.dataTables.css">
+    <script src="/xray/static/js/dataTables.js"></script>
+        <div  class="table-responsive">
+            <table id="threads_table" class="table table-hover table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Alive</th>
+                        <th>Daemon</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in threads %}
+                    <tr>
+                        <td class="py-1" style="vertical-align:middle">
+                            {{ item['id'] }}
+                        </td>
+                        <td class="py-1">
+                            {{ item['name'] }}
+                        </td>
+                        <td class="py-1">
+                            <span class="badge {{ 'bg-success' if item['alive'] else 'bg-danger' }}">
+                                {{ 'Alive' if item['alive'] else 'Not alive' }}
+                            </span>
+                        </td>
+                        <td class="py-1">
+                            {%if item['daemon'] %}
+                            <span class="badge bg-secondary">
+                                Daemon
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <script>
+            new DataTable('#threads_table', {
+                order: [[0, 'asc']],
+                stateSave: true
+            });
+        </script>
+    {% endblock %}

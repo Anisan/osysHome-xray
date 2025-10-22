@@ -2,6 +2,7 @@
 
 {% block tab %}
 <a href="?op=clear_cache" class="btn btn-warning" title="Clear"><i class="fas fa-broom"></i> Clear cache</a>
+    Cache type: <span class="badge bg-primary mr-3">{{ cache_type }}</span>
     Count items: {{ count }}
     <link rel="stylesheet" href="/xray/static/css/dataTables.dataTables.css">
     <script src="/xray/static/js/dataTables.js"></script>

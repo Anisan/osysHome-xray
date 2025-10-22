@@ -1,6 +1,8 @@
 r"""
 XRAY
 """
+import json
+from app.core.utils import CustomJSONEncoder
 import sys
 import subprocess
 import platform
@@ -157,12 +159,29 @@ class xray(BasePlugin):
 
         if tab == "cache":
             from app.extensions import cache
+            keys = []
+            cache_type = cache.app.config.get('CACHE_TYPE', 'unknown')
+            if cache_type == 'redis':
+                key_prefix = cache.app.config.get('CACHE_KEY_PREFIX', '')
+                if key_prefix:
+                    pattern = f"{key_prefix}*"
+                else:
+                    pattern = "*"
+                redis_client = cache.cache._write_client
+                for key in redis_client.scan_iter(match=pattern):
+                    # Удаляем префикс
+                    key = key[len(key_prefix):]
+                    keys.append(key.decode('utf-8'))
+
+            elif cache_type == 'simple':
+                keys = cache.cache._cache
 
             values = {}
-            for k in cache.cache._cache:
-                values[k] = cache.get(k)
+            for k in keys:
+                values[k] = json.dumps(cache.get(k), cls=CustomJSONEncoder, ensure_ascii=False)
             content = {
                 "count": len(values),
+                "cache_type": cache_type,
                 "cache": values,
                 "tab": tab,
             }
@@ -234,6 +253,22 @@ class xray(BasePlugin):
         elif tab == "thread_pools":
             content = {"tab": tab}
             return render_template("xray_thread_pools.html", **content)
+        elif tab == "threads":
+            data = []
+            import threading
+            threads = threading.enumerate()
+            for thread in threads:
+                data.append({
+                    'name': thread.name,
+                    'id': thread.ident,
+                    'alive': thread.is_alive(),
+                    'daemon': thread.daemon
+                })
+            content = {
+                "threads": data,
+                "tab": tab,
+            }
+            return render_template("xray_threads.html", **content)
         elif tab == "cleaner":
             stats = objects_storage.getCleanerStat()
             content = {
@@ -309,8 +344,6 @@ class xray(BasePlugin):
                 if plugin['instance'].is_alive():
                     service_work = service_work + 1
         content['services'] = {"count": services_count, "alive": service_work, "stopped": services_count - service_work}
-        from app.extensions import cache
-        content['cache_count'] = len(cache.cache._cache)
         content['objects'] = len(objects_storage.items())
         return render_template("widget_xray.html",**content)
 
