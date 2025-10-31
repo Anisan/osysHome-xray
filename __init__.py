@@ -17,6 +17,7 @@ from app.core.models.Plugins import Notify
 from app.core.lib.constants import CategoryNotify
 from app.api import api
 from plugins.xray.utils.pool_monitor import DatabasePoolMonitor
+from app.core.lib.object import updateProperty
 
 class xray(BasePlugin):
 
@@ -89,6 +90,7 @@ class xray(BasePlugin):
                 sql = update(Notify).values(read=True)
                 session.execute(sql)
                 session.commit()
+                updateProperty("SystemVar.UnreadNotify", False, self.name)
             return redirect("xray?tab=notifications")
 
         if op == 'clear_notifications':
@@ -96,6 +98,7 @@ class xray(BasePlugin):
                 sql = delete(Notify)
                 session.execute(sql)
                 session.commit()
+                updateProperty("SystemVar.UnreadNotify", False, self.name)
             return redirect("xray?tab=notifications")
 
         table_name = request.args.get("table", None)
