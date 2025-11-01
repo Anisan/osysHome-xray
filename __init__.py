@@ -2,6 +2,7 @@ r"""
 XRAY
 """
 import json
+import os
 from app.core.utils import CustomJSONEncoder
 import sys
 import subprocess
@@ -248,8 +249,10 @@ class xray(BasePlugin):
             return render_template("xray_notifications.html", **content)
         elif tab == "db":
             tables = self.__get_table_info()
+            db_info = self.__get_db_info()
             content = {
                 "tables": tables,
+                "db_info": db_info,
                 "tab": tab,
             }
             return render_template("xray_db.html", **content)
@@ -447,3 +450,309 @@ class xray(BasePlugin):
         else:
             raise NotImplementedError(f"Unsupported database dialect: {engine.dialect.name}")
         return tables
+
+    def __get_db_info(self):
+        """
+        Получает информацию о подключенной СУБД: версия, размер, тип и другие параметры.
+        Работает для PostgreSQL, MySQL и SQLite.
+        """
+        engine = db.engine
+        dialect = engine.dialect.name
+        db_info = {
+            'type': dialect.upper(),
+            'version': 'Unknown',
+            'database_name': 'Unknown',
+            'database_size': 'Unknown',
+            'connection_string': str(engine.url).split('@')[-1] if '@' in str(engine.url) else str(engine.url).replace('sqlite:///', ''),
+            'max_connections': 'Unknown',
+            'active_connections': 'Unknown',
+            'idle_connections': 'Unknown',
+            'tables_count': 0,
+            'indexes_count': 0,
+            'views_count': 0,
+            'connections_usage_percent': 0,
+            'server_uptime': 'Unknown',
+            'charset': 'Unknown',
+            'collation': 'Unknown',
+        }
+
+        def format_size(size_bytes):
+            """Преобразует размер в байтах в удобочитаемый формат."""
+            if size_bytes == 0 or size_bytes is None:
+                return "0 B"
+            size_name = ("B", "KB", "MB", "GB", "TB")
+            i = 0
+            size = float(size_bytes)
+            while size >= 1024 and i < len(size_name) - 1:
+                size /= 1024
+                i += 1
+            return f"{size:.2f} {size_name[i]}"
+
+        try:
+            if dialect == 'postgresql':
+                # Получаем версию PostgreSQL
+                try:
+                    version_query = text("SELECT version();")
+                    result = db.session.execute(version_query).scalar()
+                    db_info['version'] = result.split(',')[0] if result else 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get PostgreSQL version: %s", e)
+                
+                # Получаем имя базы данных
+                try:
+                    db_name_query = text("SELECT current_database();")
+                    db_name = db.session.execute(db_name_query).scalar()
+                    db_info['database_name'] = db_name if db_name else 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get database name: %s", e)
+                
+                # Получаем размер базы данных
+                try:
+                    size_query = text("SELECT pg_database_size(current_database());")
+                    size_bytes = db.session.execute(size_query).scalar()
+                    db_info['database_size'] = format_size(size_bytes) if size_bytes is not None else '0 B'
+                except Exception as e:
+                    self.logger.warning("Failed to get database size: %s", e)
+                
+                # Получаем информацию о подключениях
+                try:
+                    conn_query = text("""
+                        SELECT 
+                            setting::int as max_conn,
+                            (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()) as active_conn,
+                            (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND state = 'idle') as idle_conn
+                        FROM pg_settings WHERE name = 'max_connections';
+                    """)
+                    conn_result = db.session.execute(conn_query).fetchone()
+                    if conn_result:
+                        db_info['max_connections'] = conn_result.max_conn if conn_result.max_conn is not None else 0
+                        db_info['active_connections'] = conn_result.active_conn if conn_result.active_conn is not None else 0
+                        db_info['idle_connections'] = conn_result.idle_conn if conn_result.idle_conn is not None else 0
+                    else:
+                        # Альтернативный способ получения max_connections
+                        try:
+                            max_conn_query = text("SHOW max_connections;")
+                            max_conn = db.session.execute(max_conn_query).scalar()
+                            db_info['max_connections'] = int(max_conn) if max_conn else 0
+                        except Exception:
+                            pass
+                        # Получаем активные подключения отдельно
+                        try:
+                            active_query = text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database();")
+                            db_info['active_connections'] = db.session.execute(active_query).scalar() or 0
+                        except Exception:
+                            pass
+                        # Получаем idle подключения отдельно
+                        try:
+                            idle_query = text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND state = 'idle';")
+                            db_info['idle_connections'] = db.session.execute(idle_query).scalar() or 0
+                        except Exception:
+                            pass
+                except Exception as e:
+                    self.logger.warning("Failed to get connection info: %s", e)
+                
+                # Количество таблиц
+                try:
+                    tables_query = text("""
+                        SELECT COUNT(*) 
+                        FROM information_schema.tables 
+                        WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+                    """)
+                    tables_count = db.session.execute(tables_query).scalar()
+                    db_info['tables_count'] = tables_count if tables_count is not None else 0
+                except Exception as e:
+                    self.logger.warning("Failed to get tables count: %s", e)
+                    # Альтернативный способ
+                    try:
+                        alt_tables_query = text("""
+                            SELECT COUNT(*) 
+                            FROM pg_tables 
+                            WHERE schemaname = 'public';
+                        """)
+                        db_info['tables_count'] = db.session.execute(alt_tables_query).scalar() or 0
+                    except Exception:
+                        pass
+                
+                # Дополнительная статистика
+                try:
+                    # Количество индексов
+                    indexes_query = text("""
+                        SELECT COUNT(*) 
+                        FROM pg_indexes 
+                        WHERE schemaname = 'public';
+                    """)
+                    db_info['indexes_count'] = db.session.execute(indexes_query).scalar() or 0
+                except Exception:
+                    db_info['indexes_count'] = 0
+                
+                try:
+                    # Количество представлений (views)
+                    views_query = text("""
+                        SELECT COUNT(*) 
+                        FROM information_schema.views 
+                        WHERE table_schema = 'public';
+                    """)
+                    db_info['views_count'] = db.session.execute(views_query).scalar() or 0
+                except Exception:
+                    db_info['views_count'] = 0
+                
+                try:
+                    # Использование подключений в процентах
+                    if db_info['max_connections'] and db_info['max_connections'] != 'Unknown' and db_info['max_connections'] != 'N/A':
+                        total_conn = db_info['active_connections'] + db_info['idle_connections']
+                        if isinstance(total_conn, int) and isinstance(db_info['max_connections'], int):
+                            db_info['connections_usage_percent'] = round((total_conn / db_info['max_connections']) * 100, 1)
+                        else:
+                            db_info['connections_usage_percent'] = 0
+                    else:
+                        db_info['connections_usage_percent'] = 0
+                except Exception:
+                    db_info['connections_usage_percent'] = 0
+                
+                try:
+                    # Время работы сервера
+                    uptime_query = text("SELECT date_trunc('second', current_timestamp - pg_postmaster_start_time()) as uptime;")
+                    uptime_result = db.session.execute(uptime_query).scalar()
+                    if uptime_result:
+                        # Конвертируем interval в строку
+                        db_info['server_uptime'] = str(uptime_result)
+                    else:
+                        db_info['server_uptime'] = 'Unknown'
+                except Exception:
+                    db_info['server_uptime'] = 'Unknown'
+
+            elif dialect == 'mysql':
+                # Получаем версию MySQL
+                try:
+                    version_query = text("SELECT VERSION();")
+                    version = db.session.execute(version_query).scalar()
+                    db_info['version'] = version if version else 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get MySQL version: %s", e)
+                
+                # Получаем имя базы данных
+                try:
+                    db_name_query = text("SELECT DATABASE();")
+                    db_name = db.session.execute(db_name_query).scalar()
+                    db_info['database_name'] = db_name if db_name else 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get database name: %s", e)
+                
+                # Получаем размер базы данных
+                try:
+                    size_query = text("""
+                        SELECT 
+                            SUM(data_length + index_length) AS size_bytes,
+                            @@character_set_database AS charset,
+                            @@collation_database AS collation
+                        FROM information_schema.tables 
+                        WHERE table_schema = DATABASE();
+                    """)
+                    size_result = db.session.execute(size_query).fetchone()
+                    if size_result:
+                        db_info['database_size'] = format_size(size_result.size_bytes) if size_result.size_bytes else '0 B'
+                        db_info['charset'] = size_result.charset or 'Unknown'
+                        db_info['collation'] = size_result.collation or 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get database size: %s", e)
+                
+                # Получаем информацию о подключениях
+                try:
+                    conn_query = text("""
+                        SELECT 
+                            @@max_connections as max_conn,
+                            (SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB = DATABASE()) as active_conn,
+                            (SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB = DATABASE() AND COMMAND = 'Sleep') as idle_conn
+                    """)
+                    conn_result = db.session.execute(conn_query).fetchone()
+                    if conn_result:
+                        db_info['max_connections'] = conn_result.max_conn if conn_result.max_conn is not None else 0
+                        db_info['active_connections'] = conn_result.active_conn if conn_result.active_conn is not None else 0
+                        db_info['idle_connections'] = conn_result.idle_conn if conn_result.idle_conn is not None else 0
+                except Exception as e:
+                    self.logger.warning("Failed to get connection info: %s", e)
+                
+                # Количество таблиц
+                try:
+                    tables_query = text("""
+                        SELECT COUNT(*) 
+                        FROM information_schema.tables 
+                        WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE';
+                    """)
+                    tables_count = db.session.execute(tables_query).scalar()
+                    db_info['tables_count'] = tables_count if tables_count is not None else 0
+                except Exception as e:
+                    self.logger.warning("Failed to get tables count: %s", e)
+
+            elif dialect == 'sqlite':
+                # Версия SQLite
+                try:
+                    version_query = text("SELECT sqlite_version();")
+                    sqlite_version = db.session.execute(version_query).scalar()
+                    db_info['version'] = f"SQLite {sqlite_version}" if sqlite_version else 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get SQLite version: %s", e)
+                
+                # Путь к базе данных
+                try:
+                    db_path = str(engine.url).replace('sqlite:///', '')
+                    db_name = db_path.split('/')[-1] if '/' in db_path else db_path.split('\\')[-1]
+                    db_info['database_name'] = db_name if db_name else 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get database name: %s", e)
+                
+                # Получаем размер файла БД
+                try:
+                    db_path = str(engine.url).replace('sqlite:///', '')
+                    if os.path.exists(db_path):
+                        size_bytes = os.path.getsize(db_path)
+                        db_info['database_size'] = format_size(size_bytes)
+                    else:
+                        db_info['database_size'] = 'Unknown'
+                except Exception as e:
+                    self.logger.warning("Failed to get database size: %s", e)
+                
+                # Количество таблиц
+                try:
+                    tables_query = text("SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+                    tables_count = db.session.execute(tables_query).scalar()
+                    db_info['tables_count'] = tables_count if tables_count is not None else 0
+                except Exception as e:
+                    self.logger.warning("Failed to get tables count: %s", e)
+                
+                # SQLite не имеет понятия max_connections в том же смысле
+                db_info['max_connections'] = 'N/A'
+                db_info['active_connections'] = 'N/A'
+                db_info['idle_connections'] = 'N/A'
+
+        except Exception as e:
+            self.logger.exception("Error getting database info: %s", e)
+            db_info['error'] = str(e)
+        
+        # Убеждаемся, что все обязательные поля заполнены
+        if not db_info['type'] or db_info['type'] == 'UNKNOWN':
+            db_info['type'] = engine.dialect.name.upper() if engine.dialect.name else 'UNKNOWN'
+        
+        # Обрабатываем числовые значения
+        if db_info['tables_count'] is None or (isinstance(db_info['tables_count'], str) and db_info['tables_count'] in ['Unknown', 'N/A']):
+            db_info['tables_count'] = 0
+        
+        if db_info['indexes_count'] is None:
+            db_info['indexes_count'] = 0
+            
+        if db_info['views_count'] is None:
+            db_info['views_count'] = 0
+        
+        if db_info['connections_usage_percent'] is None:
+            db_info['connections_usage_percent'] = 0
+        
+        # Для подключений: если значение 'Unknown' или None, устанавливаем 0 (кроме SQLite, где 'N/A' нормально)
+        if db_info['active_connections'] == 'Unknown' or db_info['active_connections'] is None:
+            if dialect != 'sqlite':
+                db_info['active_connections'] = 0
+        
+        if db_info['idle_connections'] == 'Unknown' or db_info['idle_connections'] is None:
+            if dialect != 'sqlite':
+                db_info['idle_connections'] = 0
+
+        return db_info

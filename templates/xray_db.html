@@ -4,49 +4,209 @@
 <link rel="stylesheet" href="/xray/static/css/dataTables.dataTables.css">
 <script src="/xray/static/js/dataTables.js"></script>
 <script src="/xray/static/js/file-size.js"></script>
-<div class="container">  
-    <h4>Database Pool Monitoring</h4>  
-     <!-- Основные метрики -->   
-    <div class="row">  
-        <div class="col-md-4">  
-            <div class="card text-center">  
-                <div class="card-body">  
-                    <h5 class="card-title">Active Connections</h5>  
-                    <h2 id="active-connections" class="text-primary">-</h2>  
-                    <small id="pool-usage" class="text-muted">-</small>  
-                </div>  
-            </div>  
-        </div>  
-        <div class="col-md-4">  
-            <div class="card text-center">  
-                <div class="card-body">  
-                    <h5 class="card-title">Pool Health</h5>  
-                    <h2 id="health-score" class="text-success">-</h2>  
-                    <small id="health-status" class="text-muted">-</small>  
-                </div>  
-            </div>  
-        </div>  
-        <div class="col-md-4">  
-            <div class="card text-center">  
-                <div class="card-body">  
-                    <h5 class="card-title">Overflow</h5>  
-                    <h2 id="overflow" class="text-primary">-</h2>  
-                    <small id="overflow-usage" class="text-muted">-</small>  
-                </div>  
-            </div>  
-        </div>  
+<div class="container-fluid">  
+    <div class="row">
+        <!-- Левая колонка: Database Information -->
+        <div class="col-md-4 d-flex">
+            <div class="card flex-fill d-flex flex-column">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-database"></i> Database Information</h5>
+                </div>
+                <div class="card-body flex-grow-1">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted" style="width: 45%;"><strong>Type:</strong></td>
+                            <td><span class="badge bg-primary">{{ db_info.type }}</span></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>Version:</strong></td>
+                            <td>{{ db_info.version }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>Database Name:</strong></td>
+                            <td><code>{{ db_info.database_name }}</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>Database Size:</strong></td>
+                            <td><strong>{{ db_info.database_size }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>Tables Count:</strong></td>
+                            <td><span class="badge bg-secondary">{{ db_info.tables_count }}</span></td>
+                        </tr>
+                        {% if db_info.indexes_count and db_info.indexes_count > 0 %}
+                        <tr>
+                            <td class="text-muted"><strong>Indexes:</strong></td>
+                            <td><span class="badge bg-info">{{ db_info.indexes_count }}</span></td>
+                        </tr>
+                        {% endif %}
+                        {% if db_info.views_count and db_info.views_count > 0 %}
+                        <tr>
+                            <td class="text-muted"><strong>Views:</strong></td>
+                            <td><span class="badge bg-info">{{ db_info.views_count }}</span></td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <td class="text-muted"><strong>Connection:</strong></td>
+                            <td><code class="small">{{ db_info.connection_string }}</code></td>
+                        </tr>
+                        {% if db_info.max_connections != 'Unknown' and db_info.max_connections != 'N/A' %}
+                        <tr>
+                            <td class="text-muted"><strong>Max Connections:</strong></td>
+                            <td>{{ db_info.max_connections }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <td class="text-muted"><strong>Active:</strong></td>
+                            <td>
+                                {% if db_info.active_connections != 'Unknown' and db_info.active_connections != 'N/A' %}
+                                <span class="badge bg-success">{{ db_info.active_connections }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">0</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>Idle:</strong></td>
+                            <td>
+                                {% if db_info.idle_connections != 'Unknown' and db_info.idle_connections != 'N/A' %}
+                                <span class="badge bg-secondary">{{ db_info.idle_connections }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">0</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if db_info.connections_usage_percent and db_info.connections_usage_percent > 0 %}
+                        <tr>
+                            <td class="text-muted"><strong>Connections Usage:</strong></td>
+                            <td>
+                                <span class="badge {% if db_info.connections_usage_percent > 80 %}bg-danger{% elif db_info.connections_usage_percent > 60 %}bg-warning{% else %}bg-success{% endif %}">
+                                    {{ db_info.connections_usage_percent }}%
+                                </span>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% if db_info.server_uptime and db_info.server_uptime != 'Unknown' %}
+                        <tr>
+                            <td class="text-muted"><strong>Server Uptime:</strong></td>
+                            <td><small>{{ db_info.server_uptime }}</small></td>
+                        </tr>
+                        {% endif %}
+                        {% if db_info.charset != 'Unknown' %}
+                        <tr>
+                            <td class="text-muted"><strong>Charset:</strong></td>
+                            <td>{{ db_info.charset }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if db_info.collation != 'Unknown' %}
+                        <tr>
+                            <td class="text-muted"><strong>Collation:</strong></td>
+                            <td>{{ db_info.collation }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Правая колонка: Database Pool Monitoring и Pool Usage History -->
+        <div class="col-md-8">
+            <!-- Database Pool Monitoring -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Database Pool Monitoring</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Основные метрики -->   
+                    <div class="row">  
+                        <div class="col-md-4">  
+                            <div class="card text-center">  
+                                <div class="card-body">  
+                                    <h5 class="card-title">Active Connections</h5>  
+                                    <h2 id="active-connections" class="text-primary">-</h2>  
+                                    <small id="pool-usage" class="text-muted">-</small>  
+                                </div>  
+                            </div>  
+                        </div>  
+                        <div class="col-md-4">  
+                            <div class="card text-center">  
+                                <div class="card-body">  
+                                    <h5 class="card-title">Pool Health</h5>  
+                                    <h2 id="health-score" class="text-success">-</h2>  
+                                    <small id="health-status" class="text-muted">-</small>  
+                                </div>  
+                            </div>  
+                        </div>  
+                        <div class="col-md-4">  
+                            <div class="card text-center">  
+                                <div class="card-body">  
+                                    <h5 class="card-title">Overflow</h5>  
+                                    <h2 id="overflow" class="text-primary">-</h2>  
+                                    <small id="overflow-usage" class="text-muted">-</small>  
+                                </div>  
+                            </div>  
+                        </div>  
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pool Usage History -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-area"></i> Pool Usage History</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="poolHistoryChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
-    <!-- Графики -->  
-    <div class="row mt-4">  
-        <div class="col-md-12">  
-            <div class="card">  
-                <div class="card-header">Pool Usage History</div>  
-                <div class="card-body">  
-                    <canvas id="poolHistoryChart" height="100"></canvas>  
-                </div>  
-            </div>  
-        </div>  
-    </div>  
+
+    <!-- Список таблиц в отдельной карточке -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Database Tables</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="dbtables" class="table table-hover table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Rows</th>
+                                    <th>Size</th>
+                                    <th>Module</th>
+                                    {% if current_user.role in ["admin","root"] %}
+                                    <th>Actions</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for table in tables %}
+                                <tr>
+                                    <td>{{ table.table_name }}</td>
+                                    <td>{{ table.row_count }}</td>
+                                    <td>{{ table.size }}</td>
+                                    <td>{{ table.module }}</td>
+                                    {% if current_user.role in ["admin","root"] %}
+                                    <td  class="py-1" width="1%" nowrap>
+                                        <div>
+                                            <a href="?op=clear_table&table={{table.table_name}}" class="btn btn-warning" onClick="return confirm('Clear table?')"><i class="fas fa-broom"></i> Clear</a>
+                                            <a href="?op=drop_table&table={{table.table_name}}" class="btn btn-danger" onClick="return confirm('Drop table?')"><i class="fas fa-trash"></i> Drop</a>
+                                        </div>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </div>  
   
@@ -146,40 +306,6 @@ function updatePoolHistoryChart() {
 setInterval(updatePoolStats, 30000);  
 updatePoolStats();  
 </script>
-
-<div class="table-responsive">
-    <table id="dbtables" class="table table-hover table-striped">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Rows</th>
-                <th>Size</th>
-                <th>Module</th>
-                {% if current_user.role in ["admin","root"] %}
-                <th>Actions</th>
-                {% endif %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for table in tables %}
-            <tr>
-                <td>{{ table.table_name }}</td>
-                <td>{{ table.row_count }}</td>
-                <td>{{ table.size }}</td>
-                <td>{{ table.module }}</td>
-                {% if current_user.role in ["admin","root"] %}
-                <td  class="py-1" width="1%" nowrap>
-                    <div>
-                        <a href="?op=clear_table&table={{table.table_name}}" class="btn btn-warning" onClick="return confirm('Clear table?')"><i class="fas fa-broom"></i> Clear</a>
-                        <a href="?op=drop_table&table={{table.table_name}}" class="btn btn-danger" onClick="return confirm('Drop table?')"><i class="fas fa-trash"></i> Drop</a>
-                    </div>
-                </td>
-                {% endif %}
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
 <script>
     new DataTable('#dbtables', {
         order: [[0, 'asc']],
