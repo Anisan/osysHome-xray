@@ -114,12 +114,12 @@ class thread_pools_stats(Resource):
     @handle_admin_required
     def get(self):
         """Получить статистику всех пулов потоков"""
-        from app.core.main.ObjectManager import _poolLinkedProperty, _poolSaveHistory
+        from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
         from app.core.lib.common import _poolSay, _poolPlaysound
         data = {"linked_pool":_poolLinkedProperty.get_monitoring_stats(),
-                "save_history_pool": _poolSaveHistory.get_monitoring_stats(),
                 "say_pool": _poolSay.get_monitoring_stats(),
-                "playsound_pool": _poolPlaysound.get_monitoring_stats()}
+                "playsound_pool": _poolPlaysound.get_monitoring_stats(),
+                "batch_writer": _batch_writer.get_stats()}
         return jsonify(data)
 
 @_api_ns.route("/thread_pools/history")
@@ -128,10 +128,10 @@ class thread_pools_history(Resource):
     @handle_admin_required
     def get(self):
         """Получить историю пулов потоков"""
-        from app.core.main.ObjectManager import _poolLinkedProperty, _poolSaveHistory
+        from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
         from app.core.lib.common import _poolSay, _poolPlaysound
         data = {"linked_pool":_poolLinkedProperty.get_monitoring_stats(),
-                "save_history_pool": _poolSaveHistory.get_monitoring_stats(),
                 "say_pool": _poolSay.get_monitoring_stats(),
-                "playsound_pool": _poolPlaysound.get_monitoring_stats()}
+                "playsound_pool": _poolPlaysound.get_monitoring_stats(),
+                "batch_writer": _batch_writer.get_stats()}
         return jsonify(data)

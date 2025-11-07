@@ -3,15 +3,27 @@
 {% block tab %}  
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  
 <div class="container">  
-    <h4>Thread Pools Monitoring</h4>  
-      
-    <!-- Метрики для 4 пулов -->  
-    <div class="row" id="pools-metrics">  
-        <!-- Динамически заполняется JavaScript -->  
-    </div>  
+    <div class="row g-2">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header">Thread Pools Monitoring</div>
+                <div class="card-body d-flex" id="pools-metrics">
+                <!-- Динамически заполняется JavaScript -->  
+                </div>  
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">Batch Writer Properties</div>
+                <div class="card-body" id="batch-writer-metrics">
+                <!-- Динамически заполняется JavaScript -->  
+                </div>  
+            </div>
+        </div>
+    </div>
       
     <!-- Графики -->  
-    <div class="row mt-4">  
+    <div class="row mt-0 g-2">  
         <div class="col-md-6">  
             <div class="card">  
                 <div class="card-header">Pool Utilization</div>  
@@ -31,7 +43,7 @@
     </div>  
       
     <!-- История задач -->  
-    <div class="row mt-4">  
+    <div class="row mt-2">  
         <div class="col-md-12">  
             <div class="card">  
                 <div class="card-header">Recent Tasks</div>  
@@ -71,36 +83,83 @@ function updateThreadPoolsStats() {
         .catch(error => console.error('Error:', error));  
 }  
   
-function updatePoolsMetrics(data) {  
-    const container = document.getElementById('pools-metrics');  
-    container.innerHTML = '';  
-      
-    Object.entries(data).forEach(([poolName, poolData]) => {  
-        const col = document.createElement('div');  
-        col.className = 'col-md-3 mb-3';  
-          
-        const statusClass = poolData.thread_pool.pool_utilization > 80 ? 'text-danger' :   
-                           poolData.thread_pool.pool_utilization > 60 ? 'text-warning' : 'text-success';  
-          
-        col.innerHTML = `  
-            <div class="card text-center">  
-                <div class="card-body">  
-                    <h6 class="card-title">${poolName}</h6>  
-                    <h4 class="${statusClass}">${poolData.thread_pool.active_tasks|length}/${poolData.thread_pool.max_workers}</h4>  
-                    <small class="text-muted">${poolData.thread_pool.pool_utilization.toFixed(1)}% utilization</small>  
-                    <div class="mt-2">  
-                        <small>Generation: ${poolData.thread_pool.pool_generation}</small><br>
-                        <small>Completed: ${poolData.thread_pool.completed_tasks}</small><br>  
-                        <small>Failed: ${poolData.thread_pool.failed_tasks}</small><br>  
-                        <small>Rejected: ${poolData.thread_pool.rejected_tasks}</small><br>  
-                        <small>Queue: ${poolData.thread_pool.queue_size}</small>  
-                    </div>  
-                </div>  
-            </div>  
-        `;  
-        container.appendChild(col);  
-    });  
-}  
+function updatePoolsMetrics(data) {
+    // Обновление Batch Writer в отдельной карточке
+    const batchWriterContainer = document.getElementById('batch-writer-metrics');
+    if (data.batch_writer) {
+        const bw = data.batch_writer;
+        const errorRate = bw.efficiency.error_rate || 0;
+        const statusClass = errorRate > 5 ? 'text-danger' : errorRate > 1 ? 'text-warning' : 'text-success';
+        
+        batchWriterContainer.innerHTML = `
+            <div class="text-center">
+                <h4 class="${statusClass}">${bw.current_batch_size}</h4>
+                <small class="text-muted">Current batch size</small>
+                <div class="mt-3">
+                    <small>Flush interval: ${bw.flush_interval}s</small><br>
+                    <small>Worker alive: ${bw.worker_thread_alive ? 'Yes' : 'No'}</small><br>
+                    <small>Total added: ${bw.total_added}</small><br>
+                    <small>Total flushed: ${bw.total_flushed}</small><br>
+                    <small>Values updated: ${bw.total_values_updated}</small><br>
+                    <small>History inserted: ${bw.total_history_inserted}</small><br>
+                    <small>Errors: ${bw.total_errors}</small><br>
+                    <small>Error rate: ${errorRate.toFixed(2)}%</small><br>
+                    <small>Avg batch size: ${bw.efficiency.avg_batch_size}</small><br>
+                    <small>Avg flush time: ${(bw.execution_time.avg_seconds * 1000).toFixed(2)}ms</small>
+                </div>
+            </div>
+        `;
+    } else {
+        batchWriterContainer.innerHTML = '<p class="text-muted">No data available</p>';
+    }
+    
+    // Обновление Thread Pools Monitoring
+    const container = document.getElementById('pools-metrics');
+    container.innerHTML = '';
+    
+    let poolIndex = 0;
+    Object.entries(data).forEach(([poolName, poolData]) => {
+        // Пропускаем batch_writer, так как он в отдельной карточке
+        if (poolName === 'batch_writer' || !poolData.thread_pool) {
+            return;
+        }
+        
+        const poolDiv = document.createElement('div');
+        poolDiv.className = 'px-3';
+        poolDiv.style.flex = '1';
+        
+        // Добавляем вертикальную полосу разделения, кроме первого элемента
+        if (poolIndex > 0) {
+            poolDiv.style.borderLeft = '1px solid #dee2e6';
+        }
+        poolIndex++;
+        
+        const statusClass = poolData.thread_pool.pool_utilization > 80 ? 'text-danger' : 
+                           poolData.thread_pool.pool_utilization > 60 ? 'text-warning' : 'text-success';
+        
+        poolDiv.innerHTML = `
+            <div class="text-center">
+                <h6 class="fw-bold">${poolName}</h6>
+                <h4 class="${statusClass}">${Object.keys(poolData.thread_pool.active_tasks || {}).length}/${poolData.thread_pool.max_workers}</h4>
+                <small class="text-muted">${poolData.thread_pool.pool_utilization.toFixed(1)}% utilization</small>
+                <div class="mt-2">
+                    <small>Generation: ${poolData.thread_pool.pool_generation}</small><br>
+                    <small>Completed: ${poolData.thread_pool.completed_tasks}</small><br>  
+                    <small>Failed: ${poolData.thread_pool.failed_tasks}</small><br>  
+                    <small>Rejected: ${poolData.thread_pool.rejected_tasks}</small><br>  
+                    <small>Queue: ${poolData.thread_pool.queue_size}</small>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(poolDiv);
+    });
+    
+    // Если нет пулов, показываем сообщение
+    if (container.children.length === 0) {
+        container.innerHTML = '<p class="text-muted">No thread pools data available</p>';
+    }
+}
 
 function getGreenIntensity(value) {  
     // Зеленый цвет с яркостью от 0.3 до 1.0 в зависимости от значения  
@@ -114,14 +173,15 @@ function getRedIntensity(value) {
     return `rgba(220, 53, 69, ${intensity})`;  
 }  
   
-function updateCharts(data) {  
-    // График утилизации  
-    const utilizationCtx = document.getElementById('utilizationChart').getContext('2d');  
-    if (utilizationChart) utilizationChart.destroy();  
-      
-    const poolNames = Object.keys(data);  
+function updateCharts(data) {
+    // График утилизации
+    const utilizationCtx = document.getElementById('utilizationChart').getContext('2d');
+    if (utilizationChart) utilizationChart.destroy();
+    
+    // Фильтруем только пулы потоков (не batch_writer)
+    const poolNames = Object.keys(data).filter(name => name !== 'batch_writer' && data[name].thread_pool);
     const utilizationData = poolNames.map(name => data[name].thread_pool.pool_utilization);
-    const maxUtilizationData = poolNames.map(name => data[name].thread_pool.max_concurrent_tasks / data[name].thread_pool.max_workers * 100);  
+    const maxUtilizationData = poolNames.map(name => data[name].thread_pool.max_concurrent_tasks / data[name].thread_pool.max_workers * 100);
       
     utilizationChart = new Chart(utilizationCtx, {  
         type: 'bar',  
@@ -144,18 +204,28 @@ function updateCharts(data) {
             }  
         }  
     });  
-      
-    // График времени выполнения  
-    const executionCtx = document.getElementById('executionChart').getContext('2d');  
-    if (executionChart) executionChart.destroy();  
-      
-    const avgTimes = poolNames.map(name => data[name].execution_time.avg_execution_time * 1000);  
-    const maxTimes = poolNames.map(name => data[name].execution_time.max_execution_time * 1000);  
+    
+    const poolNames2 = Object.keys(data).filter(name => name !== 'batch_writer' && data[name].thread_pool);
+    
+    // График времени выполнения
+    const executionCtx = document.getElementById('executionChart').getContext('2d');
+    if (executionChart) executionChart.destroy();
+    
+    const avgTimes = poolNames2.map(name => data[name].execution_time.avg_execution_time * 1000);
+    const maxTimes = poolNames2.map(name => data[name].execution_time.max_execution_time * 1000);
+    
+    // Добавляем данные batch_writer, если есть
+    if (data.batch_writer && data.batch_writer.execution_time) {
+        const bw = data.batch_writer;
+        poolNames2.push('batch_writer');
+        avgTimes.push(bw.execution_time.avg_seconds * 1000);
+        maxTimes.push(bw.execution_time.max_seconds * 1000);
+    }
       
     executionChart = new Chart(executionCtx, {  
         type: 'line',  
         data: {  
-            labels: poolNames,  
+            labels: poolNames2,  
             datasets: [{  
                 label: 'Avg Execution Time (ms)',  
                 data: avgTimes,  
@@ -175,25 +245,45 @@ function updateCharts(data) {
     });  
 }  
   
-function updateTasksTable(data) {  
-    const tbody = document.getElementById('tasks-tbody');  
-    tbody.innerHTML = '';  
-      
-    Object.entries(data).forEach(([poolName, poolData]) => {  
-        if (poolData.history) {  
-            poolData.history.slice(-20).forEach(task => {  
-                const row = tbody.insertRow();  
-                row.innerHTML = `  
-                    <td><span class="badge bg-primary">${poolName}</span></td>  
-                    <td>${task.task_name}</td>  
-                    <td>${(task.duration * 1000).toFixed(2)}ms</td>  
-                    <td><span class="badge ${task.success ? 'bg-success' : 'bg-danger'}">${task.success ? 'Success' : 'Failed'}</span></td>  
-                    <td>${task.time}</td>  
-                `;  
-            });  
-        }  
-    });  
-}  
+function updateTasksTable(data) {
+    const tbody = document.getElementById('tasks-tbody');
+    tbody.innerHTML = '';
+    
+    Object.entries(data).forEach(([poolName, poolData]) => {
+        if (poolName === 'batch_writer') {
+            // Специальная обработка для batch_writer
+            const bw = poolData;
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td><span class="badge bg-info">batch_writer</span></td>
+                <td>Batch Write</td>
+                <td>${(bw.execution_time.avg_seconds * 1000).toFixed(2)}ms (avg)</td>
+                <td><span class="badge ${bw.total_errors === 0 ? 'bg-success' : 'bg-warning'}">${bw.total_errors === 0 ? 'OK' : 'Errors: ' + bw.total_errors}</span></td>
+                <td>${bw.last_flush_time || 'Never'}</td>
+            `;
+            if (bw.last_error) {
+                const errorRow = tbody.insertRow();
+                errorRow.innerHTML = `
+                    <td><span class="badge bg-danger">batch_writer</span></td>
+                    <td>Last Error</td>
+                    <td colspan="2">${bw.last_error.substring(0, 100)}</td>
+                    <td>${bw.last_error_time || ''}</td>
+                `;
+            }
+        } else if (poolData.history) {
+            poolData.history.slice(-20).forEach(task => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td><span class="badge bg-primary">${poolName}</span></td>
+                    <td>${task.task_name}</td>
+                    <td>${(task.duration * 1000).toFixed(2)}ms</td>
+                    <td><span class="badge ${task.success ? 'bg-success' : 'bg-danger'}">${task.success ? 'Success' : 'Failed'}</span></td>
+                    <td>${task.time}</td>
+                `;
+            });
+        }
+    });
+}
   
 // Обновление каждые 30 секунд  
 setInterval(updateThreadPoolsStats, 30000);  
