@@ -1,0 +1,30 @@
+<div class="text-center">
+    <h4>Batch Writer</h4>
+    {% if stats %}
+    <div class="mb-3">
+        <span class="badge bg-info me-2">Flush interval: {{ stats.flush_interval }}s</span>
+        <span class="badge {{ 'bg-success' if stats.worker_thread_alive else 'bg-danger' }}">
+            Worker {{ 'running' if stats.worker_thread_alive else 'stopped' }}
+        </span>
+    </div>
+    <div>Current batch size: <strong>{{ stats.current_batch_size }}</strong></div>
+    <div>Total added / flushed: <strong>{{ stats.total_added }}</strong> / <strong>{{ stats.total_flushed }}</strong></div>
+    <div>Total updated values: <strong>{{ stats.total_values_updated }}</strong></div>
+    <div>Total history inserted: <strong>{{ stats.total_history_inserted }}</strong></div>
+    <div>Total errors: <span class="badge {{ 'bg-danger' if stats.total_errors else 'bg-success' }}">{{ stats.total_errors }}</span></div>
+    <div class="mt-2">Last flush: {{ stats.last_flush_time or '—' }}</div>
+    <div>Last error: {% if stats.last_error %}{{ stats.last_error }} ({{ stats.last_error_time or 'time unknown' }}){% else %}<span class="text-muted">no errors</span>{% endif %}</div>
+    <div class="mt-3">
+        <div>Execution time (avg): {{ stats.execution_time.avg_seconds }} sec</div>
+        <div>Execution time (min): {{ stats.execution_time.min_seconds }} sec</div>
+        <div>Execution time (max): {{ stats.execution_time.max_seconds }} sec</div>
+        <div>Execution count: {{ stats.execution_time.count }}</div>
+    </div>
+    <div class="mt-3">
+        <div>Efficiency (avg batch): {{ stats.efficiency.avg_batch_size }}</div>
+        <div>Efficiency (error rate): {{ stats.efficiency.error_rate }}%</div>
+    </div>
+    {% else %}
+    <div class="text-muted">Нет данных о batch writer.</div>
+    {% endif %}
+</div>

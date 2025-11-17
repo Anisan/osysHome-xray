@@ -340,7 +340,22 @@ class xray(BasePlugin):
             self.logger.exception(e)
             return []
 
-    def widget(self):
+    def widgets(self):
+        return [
+            {"name":"default","description":"Statistics"},
+            {"name":"batch_writer","description":"Statistics batch writer"}
+        ]
+
+    def widget(self,name):
+        if name == 'batch_writer':
+            from app.core.main.ObjectManager import _batch_writer
+            stats = None
+            try:
+                stats = _batch_writer.get_stats()
+            except Exception as exc:
+                self.logger.exception(exc)
+            return render_template("widget_batch_writer.html", stats=stats)
+
         content = {}
         services_count = 0
         service_work = 0
