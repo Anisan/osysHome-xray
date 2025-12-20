@@ -346,7 +346,7 @@ class xray(BasePlugin):
             {"name":"batch_writer","description":"Statistics batch writer"}
         ]
 
-    def widget(self,name):
+    def widget(self, name:str = None):
         if name == 'batch_writer':
             from app.core.main.ObjectManager import _batch_writer
             stats = None
