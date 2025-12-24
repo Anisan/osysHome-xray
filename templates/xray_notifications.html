@@ -14,7 +14,9 @@
                     <th>Category</th>
                     <th>Created</th>
                     <th>Read</th>
+                    <th>Read date</th>
                     <th>Count repeat</th>
+                    <th>Last updated</th>
                     <th>Source</th>
                     <th></th>
                 </tr>
@@ -23,6 +25,19 @@
                 {% for notify in notifications %}
                 <tr class="table-{{notify.color}}">
                     <td class="py-1" style="vertical-align:middle">
+                        {% if notify.category_name == 'Debug' %}
+                        <i class="fas fa-info-circle me-1"></i>
+                        {% elif notify.category_name == 'Info' %}
+                        <i class="fas fa-info-circle me-1"></i>
+                        {% elif notify.category_name == 'Warning' %}
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        {% elif notify.category_name == 'Error' %}
+                        <i class="fas fa-times-circle me-1"></i>
+                        {% elif notify.category_name == 'Fatal' %}
+                        <i class="fas fa-stop-circle me-1"></i>
+                        {% else %}
+                        <i class="fas fa-info-circle me-1"></i>
+                        {% endif %}
                         {{ notify.name }}
                     </td>
                     <td class="py-1" style="vertical-align:middle">
@@ -38,7 +53,13 @@
                         {{ notify.read}}
                     </td>
                     <td class="py-1">
+                        {% if notify.read_date %}{{ notify.read_date }}{% else %}-{% endif %}
+                    </td>
+                    <td class="py-1">
                         {{ notify.count }}
+                    </td>
+                    <td class="py-1">
+                        {% if notify.last_updated %}{{ notify.last_updated }}{% else %}-{% endif %}
                     </td>
                     <td class="py-1">
                         <span class='badge bg-success'>{{ notify.source }}</span>

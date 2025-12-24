@@ -67,7 +67,7 @@ class xray(BasePlugin):
                 readNotify(notify)
             elif op == 'unread':
                 with session_scope() as session:
-                    sql = update(Notify).where(Notify.id == notify).values(read=False)
+                    sql = update(Notify).where(Notify.id == notify).values(read=False, read_date=None)
                     session.execute(sql)
                     session.commit()
             elif op == 'remove':
@@ -87,8 +87,9 @@ class xray(BasePlugin):
             return redirect("xray?tab=objects")
 
         if op == 'read_all':
+            from app.database import get_now_to_utc
             with session_scope() as session:
-                sql = update(Notify).values(read=True)
+                sql = update(Notify).values(read=True, read_date=get_now_to_utc())
                 session.execute(sql)
                 session.commit()
                 updateProperty("SystemVar.UnreadNotify", False, self.name)
@@ -241,6 +242,8 @@ class xray(BasePlugin):
                     item['color'] = "warning"
                 elif rec.category == CategoryNotify.Info:
                     item['color'] = "success"
+                # Строковое имя категории для шаблона уведомлений xray
+                item['category_name'] = rec.category.name if getattr(rec, "category", None) else "Info"
                 res.append(item)
             content = {
                 "notifications": res,
