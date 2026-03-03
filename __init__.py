@@ -7,7 +7,13 @@ from app.core.utils import CustomJSONEncoder
 import sys
 import subprocess
 import platform
-import pkg_resources
+
+try:
+    from importlib import metadata
+except ImportError:
+    # Fallback for Python < 3.8
+    import importlib_metadata as metadata
+
 from sqlalchemy import delete, update, text
 from app.database import row2dict, session_scope, db, convert_utc_to_local
 from app.core.main.BasePlugin import BasePlugin
@@ -296,7 +302,7 @@ class xray(BasePlugin):
                     'path': sys.prefix
                 },
                 'flask': {
-                    'version': pkg_resources.get_distribution("flask").version if 'flask' in {pkg.key for pkg in pkg_resources.working_set} else 'Not install',
+                    'version': self.get_package_version("flask"),
                 },
                 'venv': {
                     'active': True if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix) else False,
@@ -326,12 +332,15 @@ class xray(BasePlugin):
             }
             return render_template("xray_cycles.html", **content)
 
+    def get_package_version(self, package_name):
+        try:
+            return metadata.version(package_name)
+        except metadata.PackageNotFoundError:
+            return 'Not install'
+
     def get_installed_packages(self):
         try:
             packages = []
-            # for dist in pkg_resources.working_set:
-            #     packages.append({'name': dist.project_name, 'version': dist.version})
-            # packages = sorted(packages, key=lambda x: x["name"])
             result = subprocess.run([sys.executable, '-m', 'pip', 'list', '--format=freeze'], capture_output=True, text=True)
             packages = []
             for line in result.stdout.split('\n'):

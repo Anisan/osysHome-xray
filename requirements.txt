@@ -1,1 +1,1 @@
-setuptools
+importlib_metadata

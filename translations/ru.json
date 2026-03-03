@@ -1,9 +1,9 @@
 {
-  "Flask version": "Flask version",
-  "Python executable": "Python executable",
-  "Python info": "Python info",
-  "Python path": "Python path",
-  "Python version": "Python version",
-  "Venv": "Venv",
-  "Venv path": "Venv path"
+  "Flask version": "Версия Flask",
+  "Python executable": "Исполняемый файл Python",
+  "Python info": "Информация о Python",
+  "Python path": "Путь к Python",
+  "Python version": "Версия Python",
+  "Venv": "Виртуальное окружение",
+  "Venv path": "Путь к виртуальному окружению"
 }
