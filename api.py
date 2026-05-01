@@ -10,6 +10,81 @@ _api_ns = Namespace(name="Xray", description="XRay namespace", validate=True)
 _instance: xray = None
 
 
+def _collect_thread_pool_stats(pool_obj, pool_alias: str):
+    """
+    Return unified stats mapping for classic pool and adaptive router.
+    """
+    if hasattr(pool_obj, "get_stats"):
+        router_stats = pool_obj.get_stats()
+        if isinstance(router_stats, dict) and all(
+            key in router_stats for key in ("safe_pool", "medium_pool", "trusted_pool")
+        ):
+            return {
+                f"{pool_alias}.safe": router_stats["safe_pool"],
+                f"{pool_alias}.medium": router_stats["medium_pool"],
+                f"{pool_alias}.trusted": router_stats["trusted_pool"],
+                f"{pool_alias}.router": {
+                    "meta_type": "router",
+                    "thread_pool": {
+                        "pool_generation": router_stats.get("safe_pool", {}).get("thread_pool", {}).get("pool_generation", 0),
+                        "max_workers": (
+                            router_stats.get("safe_pool", {}).get("thread_pool", {}).get("max_workers", 0)
+                            + router_stats.get("medium_pool", {}).get("thread_pool", {}).get("max_workers", 0)
+                            + router_stats.get("trusted_pool", {}).get("thread_pool", {}).get("max_workers", 0)
+                        ),
+                        "active_tasks": {},
+                        "completed_tasks": (
+                            router_stats.get("safe_pool", {}).get("thread_pool", {}).get("completed_tasks", 0)
+                            + router_stats.get("medium_pool", {}).get("thread_pool", {}).get("completed_tasks", 0)
+                            + router_stats.get("trusted_pool", {}).get("thread_pool", {}).get("completed_tasks", 0)
+                        ),
+                        "failed_tasks": (
+                            router_stats.get("safe_pool", {}).get("thread_pool", {}).get("failed_tasks", 0)
+                            + router_stats.get("medium_pool", {}).get("thread_pool", {}).get("failed_tasks", 0)
+                            + router_stats.get("trusted_pool", {}).get("thread_pool", {}).get("failed_tasks", 0)
+                        ),
+                        "rejected_tasks": (
+                            router_stats.get("safe_pool", {}).get("thread_pool", {}).get("rejected_tasks", 0)
+                            + router_stats.get("medium_pool", {}).get("thread_pool", {}).get("rejected_tasks", 0)
+                            + router_stats.get("trusted_pool", {}).get("thread_pool", {}).get("rejected_tasks", 0)
+                        ),
+                        "max_concurrent_tasks": (
+                            router_stats.get("safe_pool", {}).get("thread_pool", {}).get("max_concurrent_tasks", 0)
+                            + router_stats.get("medium_pool", {}).get("thread_pool", {}).get("max_concurrent_tasks", 0)
+                            + router_stats.get("trusted_pool", {}).get("thread_pool", {}).get("max_concurrent_tasks", 0)
+                        ),
+                        "queue_size": (
+                            router_stats.get("safe_pool", {}).get("thread_pool", {}).get("queue_size", 0)
+                            + router_stats.get("medium_pool", {}).get("thread_pool", {}).get("queue_size", 0)
+                            + router_stats.get("trusted_pool", {}).get("thread_pool", {}).get("queue_size", 0)
+                        ),
+                        "pool_utilization": (
+                            (
+                                router_stats.get("safe_pool", {}).get("thread_pool", {}).get("pool_utilization", 0.0)
+                                + router_stats.get("medium_pool", {}).get("thread_pool", {}).get("pool_utilization", 0.0)
+                                + router_stats.get("trusted_pool", {}).get("thread_pool", {}).get("pool_utilization", 0.0)
+                            ) / 3.0
+                        ),
+                    },
+                    "execution_time": {
+                        "avg_execution_time": 0,
+                        "min_execution_time": 0,
+                        "max_execution_time": 0,
+                        "total_execution_time": 0,
+                    },
+                    "history": [],
+                    "router": {
+                        "routing_thresholds": router_stats.get("routing_thresholds", {}),
+                        "owners_count": len(router_stats.get("owners", {})),
+                        "owners": router_stats.get("owners", {}),
+                    },
+                },
+            }
+    if hasattr(pool_obj, "get_monitoring_stats"):
+        return {pool_alias: pool_obj.get_monitoring_stats()}
+    return {}
+
+
 def create_api_ns(instance: xray):
     global _instance
     _instance = instance
@@ -116,10 +191,11 @@ class thread_pools_stats(Resource):
         """Получить статистику всех пулов потоков"""
         from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
         from app.core.lib.common import _poolSay, _poolPlaysound
-        data = {"linked_pool":_poolLinkedProperty.get_monitoring_stats(),
-                "say_pool": _poolSay.get_monitoring_stats(),
-                "playsound_pool": _poolPlaysound.get_monitoring_stats(),
-                "batch_writer": _batch_writer.get_stats()}
+        data = {}
+        data.update(_collect_thread_pool_stats(_poolLinkedProperty, "linked_pool"))
+        data.update(_collect_thread_pool_stats(_poolSay, "say_pool"))
+        data.update(_collect_thread_pool_stats(_poolPlaysound, "playsound_pool"))
+        data["batch_writer"] = _batch_writer.get_stats()
         return jsonify(data)
 
 @_api_ns.route("/thread_pools/history")
@@ -130,8 +206,9 @@ class thread_pools_history(Resource):
         """Получить историю пулов потоков"""
         from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
         from app.core.lib.common import _poolSay, _poolPlaysound
-        data = {"linked_pool":_poolLinkedProperty.get_monitoring_stats(),
-                "say_pool": _poolSay.get_monitoring_stats(),
-                "playsound_pool": _poolPlaysound.get_monitoring_stats(),
-                "batch_writer": _batch_writer.get_stats()}
+        data = {}
+        data.update(_collect_thread_pool_stats(_poolLinkedProperty, "linked_pool"))
+        data.update(_collect_thread_pool_stats(_poolSay, "say_pool"))
+        data.update(_collect_thread_pool_stats(_poolPlaysound, "playsound_pool"))
+        data["batch_writer"] = _batch_writer.get_stats()
         return jsonify(data)

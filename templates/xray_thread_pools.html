@@ -3,74 +3,116 @@
 {% block tab %}  
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  
 <div class="container">  
-    <div class="row g-2">
-        <div class="col-md-8">
-            <div class="card h-100">
-                <div class="card-header">Thread Pools Monitoring</div>
-                <div class="card-body d-flex" id="pools-metrics">
-                <!-- Динамически заполняется JavaScript -->  
-                </div>  
+    <ul class="nav nav-tabs mb-2" id="xrayPoolsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="xray-overview-tab" data-bs-toggle="tab" data-bs-target="#xray-overview-pane" type="button" role="tab" aria-controls="xray-overview-pane" aria-selected="true">
+                Overview
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="xray-pools-tab" data-bs-toggle="tab" data-bs-target="#xray-pools-pane" type="button" role="tab" aria-controls="xray-pools-pane" aria-selected="false">
+                Pools
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="xray-tasks-tab" data-bs-toggle="tab" data-bs-target="#xray-tasks-pane" type="button" role="tab" aria-controls="xray-tasks-pane" aria-selected="false">
+                Recent Tasks
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="xrayPoolsTabsContent">
+        <div class="tab-pane fade show active" id="xray-overview-pane" role="tabpanel" aria-labelledby="xray-overview-tab">
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">Router Insights</div>
+                        <div class="card-body" id="router-metrics">
+                        <!-- Динамически заполняется JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">Batch Writer Properties</div>
+                        <div class="card-body" id="batch-writer-metrics">
+                        <!-- Динамически заполняется JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="tab-pane fade" id="xray-pools-pane" role="tabpanel" aria-labelledby="xray-pools-tab">
+            <div class="row mt-0 g-2">
+                <div class="col-md-12">
+                    <div class="card h-100">
+                        <div class="card-header">Thread Pools Monitoring</div>
+                        <div class="card-body d-flex flex-wrap" id="pools-metrics">
+                        <!-- Динамически заполняется JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-2 g-2">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Pool Utilization</div>
+                        <div class="card-body">
+                            <canvas id="utilizationChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Execution Times</div>
+                        <div class="card-body">
+                            <canvas id="executionChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-header">Batch Writer Properties</div>
-                <div class="card-body" id="batch-writer-metrics">
-                <!-- Динамически заполняется JavaScript -->  
-                </div>  
+
+        <div class="tab-pane fade" id="xray-tasks-pane" role="tabpanel" aria-labelledby="xray-tasks-tab">
+            <div class="row mt-0">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>Recent Tasks</span>
+                            <small class="text-muted">Last 20 records per pool</small>
+                        </div>
+                        <div class="card-body">
+                            <ul class="nav nav-pills mb-2 flex-wrap" id="poolTaskTabs" role="tablist"></ul>
+                            <div class="tab-content" id="poolTaskTabsContent"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-      
-    <!-- Графики -->  
-    <div class="row mt-0 g-2">  
-        <div class="col-md-6">  
-            <div class="card">  
-                <div class="card-header">Pool Utilization</div>  
-                <div class="card-body">  
-                    <canvas id="utilizationChart" height="200"></canvas>  
-                </div>  
-            </div>  
-        </div>  
-        <div class="col-md-6">  
-            <div class="card">  
-                <div class="card-header">Execution Times</div>  
-                <div class="card-body">  
-                    <canvas id="executionChart" height="200"></canvas>  
-                </div>  
-            </div>  
-        </div>  
-    </div>  
-      
-    <!-- История задач -->  
-    <div class="row mt-2">  
-        <div class="col-md-12">  
-            <div class="card">  
-                <div class="card-header">Recent Tasks</div>  
-                <div class="card-body">  
-                    <div class="table-responsive">  
-                        <table id="tasksTable" class="table table-hover table-striped">  
-                            <thead>  
-                                <tr>  
-                                    <th>Pool</th>  
-                                    <th>Task Name</th>  
-                                    <th>Duration</th>  
-                                    <th>Status</th>  
-                                    <th>Time</th>  
-                                </tr>  
-                            </thead>  
-                            <tbody id="tasks-tbody">  
-                            </tbody>  
-                        </table>  
-                    </div>  
-                </div>  
-            </div>  
-        </div>  
-    </div>  
 </div>  
   
 <script>  
 let utilizationChart, executionChart;  
+const XRAY_MAIN_TAB_KEY = 'xray.thread_pools.active_tab';
+const XRAY_TASKS_POOL_TAB_KEY = 'xray.thread_pools.tasks.active_pool_tab';
+
+function formatPeakAge(peakTimestampMs) {
+    if (!peakTimestampMs) return 'never';
+    const ageMs = Date.now() - Number(peakTimestampMs);
+    if (!Number.isFinite(ageMs) || ageMs < 0) return 'just now';
+    const sec = Math.floor(ageMs / 1000);
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hours = Math.floor(min / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+}
   
 function updateThreadPoolsStats() {  
     fetch('/api/xray/thread_pools/stats')  
@@ -90,43 +132,262 @@ function updatePoolsMetrics(data) {
         const bw = data.batch_writer;
         const errorRate = bw.efficiency.error_rate || 0;
         const statusClass = errorRate > 5 ? 'text-danger' : errorRate > 1 ? 'text-warning' : 'text-success';
+        const flushAvgMs = (bw.execution_time.avg_seconds * 1000) || 0;
+        const flushMinMs = (bw.execution_time.min_seconds * 1000) || 0;
+        const flushMaxMs = (bw.execution_time.max_seconds * 1000) || 0;
+        const workerAlive = !!bw.worker_thread_alive;
+        const healthLabel = !workerAlive ? 'Worker Down' : errorRate > 5 ? 'Unstable' : errorRate > 1 ? 'Warning' : 'Healthy';
+        const healthBadge = !workerAlive ? 'bg-danger' : errorRate > 5 ? 'bg-danger' : errorRate > 1 ? 'bg-warning text-dark' : 'bg-success';
+        const throughput = bw.total_flushed > 0
+            ? (bw.total_values_updated / bw.total_flushed).toFixed(2)
+            : '0.00';
+        const historyPerFlush = bw.total_flushed > 0
+            ? (bw.total_history_inserted / bw.total_flushed).toFixed(2)
+            : '0.00';
         
         batchWriterContainer.innerHTML = `
-            <div class="text-center">
-                <h4 class="${statusClass}">${bw.current_batch_size}</h4>
-                <small class="text-muted">Current batch size</small>
-                <div class="mt-3">
+            <div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="fw-bold">Batch Writer</div>
+                    <span class="badge ${healthBadge}">${healthLabel}</span>
+                </div>
+
+                <div class="row g-2 mt-1">
+                    <div class="col-6">
+                        <div class="border rounded p-2 text-center">
+                            <div class="small text-muted">Current batch</div>
+                            <div class="fw-bold ${statusClass}">${bw.current_batch_size}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-2 text-center">
+                            <div class="small text-muted">Worker</div>
+                            <div class="fw-bold ${workerAlive ? 'text-success' : 'text-danger'}">${workerAlive ? 'Alive' : 'Down'}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-2 text-center">
+                            <div class="small text-muted">Flush avg ms</div>
+                            <div class="fw-bold">${flushAvgMs.toFixed(2)}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-2 text-center">
+                            <div class="small text-muted">Error rate</div>
+                            <div class="fw-bold ${statusClass}">${errorRate.toFixed(2)}%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-2">
+                    <small class="text-muted d-block">Performance</small>
                     <small>Flush interval: ${bw.flush_interval}s</small><br>
-                    <small>Worker alive: ${bw.worker_thread_alive ? 'Yes' : 'No'}</small><br>
+                    <small>Flush time min/avg/max: ${flushMinMs.toFixed(2)} / ${flushAvgMs.toFixed(2)} / ${flushMaxMs.toFixed(2)} ms</small><br>
+                    <small>Avg batch size: ${bw.efficiency.avg_batch_size}</small><br>
+                    <small>Values per flush: ${throughput}</small><br>
+                    <small>History per flush: ${historyPerFlush}</small>
+                </div>
+
+                <div class="mt-2">
+                    <small class="text-muted d-block">Counters</small>
                     <small>Total added: ${bw.total_added}</small><br>
                     <small>Total flushed: ${bw.total_flushed}</small><br>
                     <small>Values updated: ${bw.total_values_updated}</small><br>
                     <small>History inserted: ${bw.total_history_inserted}</small><br>
                     <small>Errors: ${bw.total_errors}</small><br>
-                    <small>Error rate: ${errorRate.toFixed(2)}%</small><br>
-                    <small>Avg batch size: ${bw.efficiency.avg_batch_size}</small><br>
-                    <small>Avg flush time: ${(bw.execution_time.avg_seconds * 1000).toFixed(2)}ms</small>
+                    <small>Last flush: ${bw.last_flush_time || 'Never'}</small>
                 </div>
+
+                ${bw.last_error ? `
+                    <div class="mt-2 border rounded p-2">
+                        <small class="text-muted d-block">Last error</small>
+                        <small class="text-danger">${String(bw.last_error).substring(0, 180)}</small><br>
+                        <small class="text-muted">${bw.last_error_time || ''}</small>
+                    </div>
+                ` : ''}
             </div>
         `;
     } else {
         batchWriterContainer.innerHTML = '<p class="text-muted">No data available</p>';
     }
     
+    // Обновление Router Insights
+    const routerContainer = document.getElementById('router-metrics');
+    const routerEntries = Object.entries(data).filter(([poolName, poolData]) => poolData && poolData.meta_type === 'router');
+    if (routerEntries.length > 0) {
+        let html = '';
+        routerEntries.forEach(([poolName, poolData]) => {
+            const rt = (poolData.router && poolData.router.routing_thresholds) || {};
+            const owners = (poolData.router && poolData.router.owners) || {};
+            const ownerItems = Object.entries(owners);
+            const poolCounts = { trusted: 0, medium: 0, safe: 0 };
+            ownerItems.forEach(([, owner]) => {
+                const p = owner.preferred_pool || 'safe';
+                if (poolCounts[p] !== undefined) poolCounts[p] += 1;
+            });
+
+            const slowOwners = ownerItems
+                .filter(([, owner]) => (owner.avg_duration_ms || 0) > 0)
+                .sort((a, b) => (b[1].avg_duration_ms || 0) - (a[1].avg_duration_ms || 0));
+
+            const errorOwners = ownerItems
+                .filter(([, owner]) => (owner.fail_count || 0) > 0)
+                .sort((a, b) => (b[1].fail_count || 0) - (a[1].fail_count || 0));
+
+            const safePool = data[`${poolName.replace('.router', '')}.safe`];
+            const mediumPool = data[`${poolName.replace('.router', '')}.medium`];
+            const trustedPool = data[`${poolName.replace('.router', '')}.trusted`];
+
+            const safeUtil = safePool?.thread_pool?.pool_utilization ?? 0;
+            const mediumUtil = mediumPool?.thread_pool?.pool_utilization ?? 0;
+            const trustedUtil = trustedPool?.thread_pool?.pool_utilization ?? 0;
+            const safeQueue = safePool?.thread_pool?.queue_size ?? 0;
+            const mediumQueue = mediumPool?.thread_pool?.queue_size ?? 0;
+            const trustedQueue = trustedPool?.thread_pool?.queue_size ?? 0;
+            const safeRejected = safePool?.thread_pool?.rejected_tasks ?? 0;
+            const mediumRejected = mediumPool?.thread_pool?.rejected_tasks ?? 0;
+            const trustedRejected = trustedPool?.thread_pool?.rejected_tasks ?? 0;
+
+            const totalInflight = ownerItems.reduce((acc, [, owner]) => acc + (owner.inflight || 0), 0);
+            const totalFailures = ownerItems.reduce((acc, [, owner]) => acc + (owner.fail_count || 0), 0);
+            const totalSuccess = ownerItems.reduce((acc, [, owner]) => acc + (owner.success_count || 0), 0);
+            const totalDecisions = totalSuccess + totalFailures;
+            const failRate = totalDecisions > 0 ? (totalFailures / totalDecisions) * 100 : 0;
+
+            const renderOwnerLines = (entries) => {
+                if (!entries || entries.length === 0) {
+                    return '<small class="text-muted">No data</small><br>';
+                }
+                return entries
+                    .map(([name, owner]) => `<small>${name}: ${Number(owner.avg_duration_ms || 0).toFixed(3)}ms, fail=${owner.fail_count || 0}</small><br>`)
+                    .join('');
+            };
+
+            const ownersTableRows = ownerItems
+                .sort((a, b) => (b[1].avg_duration_ms || 0) - (a[1].avg_duration_ms || 0))
+                .map(([name, owner]) => {
+                    const poolBadge =
+                        owner.preferred_pool === 'trusted'
+                            ? 'bg-success'
+                            : owner.preferred_pool === 'medium'
+                                ? 'bg-warning text-dark'
+                                : 'bg-secondary';
+                    return `
+                        <tr>
+                            <td class="text-truncate" style="max-width: 180px;" title="${name}">${name}</td>
+                            <td><span class="badge ${poolBadge}">${owner.preferred_pool || 'safe'}</span></td>
+                            <td>${owner.inflight || 0}</td>
+                            <td>${Number(owner.avg_duration_ms || 0).toFixed(3)}</td>
+                            <td>${owner.success_count || 0}</td>
+                            <td>${owner.fail_count || 0}</td>
+                        </tr>
+                    `;
+                })
+                .join('');
+
+            const sectionId = `router-${poolName.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+            html += `
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="fw-bold">${poolName}</div>
+                        <span class="badge ${rt.auto_enabled ? 'bg-success' : 'bg-secondary'}">Auto ${rt.auto_enabled ? 'ON' : 'OFF'}</span>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <div class="small text-muted">Owners</div>
+                                <div class="fw-bold">${poolData.router?.owners_count || 0}</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <div class="small text-muted">Running now</div>
+                                <div class="fw-bold">${totalInflight}</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <div class="small text-muted">Fail Rate</div>
+                                <div class="fw-bold ${failRate > 10 ? 'text-danger' : failRate > 3 ? 'text-warning' : 'text-success'}">${failRate.toFixed(1)}%</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <div class="small text-muted">Samples</div>
+                                <div class="fw-bold">${rt.sample_count || 0}/${rt.min_samples_for_auto || 0}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <small class="text-muted d-block">Thresholds</small>
+                        <small>Trusted <= ${(rt.fast_task_threshold_ms ?? 0).toFixed(3)}ms | Medium <= ${(rt.medium_task_threshold_ms ?? 0).toFixed(3)}ms${(Number(rt.medium_task_threshold_ms || 0) >= 20 && Number(rt.p80_ms || 0) < 20) ? ' (floor)' : ''}</small>
+                        <br>
+                        <small class="text-muted">Auto calc: p40=${Number(rt.p40_ms || 0).toFixed(3)}ms, p80=${Number(rt.p80_ms || 0).toFixed(3)}ms, p95=${Number(rt.p95_ms || 0).toFixed(3)}ms, window=${rt.window_size || 0}</small>
+                    </div>
+
+                    <div class="mt-2">
+                        <small class="text-muted d-block">Pool status</small>
+                        <small>Trusted: busy ${trustedUtil.toFixed(1)}%, queue ${trustedQueue}, dropped ${trustedRejected}</small><br>
+                        <small>Medium: busy ${mediumUtil.toFixed(1)}%, queue ${mediumQueue}, dropped ${mediumRejected}</small><br>
+                        <small>Safe: busy ${safeUtil.toFixed(1)}%, queue ${safeQueue}, dropped ${safeRejected}</small><br>
+                        <small class="text-muted">Owners by pools: trusted ${poolCounts.trusted}, medium ${poolCounts.medium}, safe ${poolCounts.safe}</small>
+                    </div>
+
+                    <div class="mt-2">
+                        <small class="text-muted d-block">Slow owners</small>
+                        ${renderOwnerLines(slowOwners)}
+                    </div>
+
+                    <div class="mt-2">
+                        <small class="text-muted d-block">Error owners</small>
+                        ${renderOwnerLines(errorOwners)}
+                    </div>
+
+                    <div class="mt-2">
+                        <small class="text-muted d-block mb-1">Owners details (all by avg ms)</small>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0" id="${sectionId}-owners-table" data-medium-threshold="${Number(rt.medium_task_threshold_ms || 0)}">
+                                <thead>
+                                    <tr>
+                                        <th>Owner</th>
+                                        <th>Pool</th>
+                                        <th>Running now</th>
+                                        <th>Avg ms</th>
+                                        <th>Ok</th>
+                                        <th>Fail</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ownersTableRows || '<tr><td colspan="6" class="text-muted">No owners data</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        routerContainer.innerHTML = html;
+    } else {
+        routerContainer.innerHTML = '<p class="text-muted">No router data</p>';
+    }
+
     // Обновление Thread Pools Monitoring
     const container = document.getElementById('pools-metrics');
     container.innerHTML = '';
     
     let poolIndex = 0;
     Object.entries(data).forEach(([poolName, poolData]) => {
-        // Пропускаем batch_writer, так как он в отдельной карточке
-        if (poolName === 'batch_writer' || !poolData.thread_pool) {
+        // Пропускаем batch_writer и router meta, так как они в отдельных карточках
+        if (poolName === 'batch_writer' || !poolData.thread_pool || poolData.meta_type === 'router') {
             return;
         }
         
         const poolDiv = document.createElement('div');
         poolDiv.className = 'px-3';
-        poolDiv.style.flex = '1';
+        poolDiv.style.flex = '1 1 220px';
+        poolDiv.style.minWidth = '220px';
         
         // Добавляем вертикальную полосу разделения, кроме первого элемента
         if (poolIndex > 0) {
@@ -136,12 +397,18 @@ function updatePoolsMetrics(data) {
         
         const statusClass = poolData.thread_pool.pool_utilization > 80 ? 'text-danger' : 
                            poolData.thread_pool.pool_utilization > 60 ? 'text-warning' : 'text-success';
+        const currentUtil = Number(poolData.thread_pool.pool_utilization || 0);
+        const peakUtil = poolData.thread_pool.max_workers
+            ? (Number(poolData.thread_pool.max_concurrent_tasks || 0) / Number(poolData.thread_pool.max_workers)) * 100
+            : 0;
+        const peakAge = formatPeakAge(poolData.thread_pool.peak_active_at);
         
         poolDiv.innerHTML = `
             <div class="text-center">
                 <h6 class="fw-bold">${poolName}</h6>
                 <h4 class="${statusClass}">${Object.keys(poolData.thread_pool.active_tasks || {}).length}/${poolData.thread_pool.max_workers}</h4>
-                <small class="text-muted">${poolData.thread_pool.pool_utilization.toFixed(1)}% utilization</small>
+                <small class="text-muted">Current: ${currentUtil.toFixed(1)}%</small><br>
+                <small class="text-muted">Historical peak: ${peakUtil.toFixed(1)}% (${peakAge})</small>
                 <div class="mt-2">
                     <small>Generation: ${poolData.thread_pool.pool_generation}</small><br>
                     <small>Completed: ${poolData.thread_pool.completed_tasks}</small><br>  
@@ -179,7 +446,9 @@ function updateCharts(data) {
     if (utilizationChart) utilizationChart.destroy();
     
     // Фильтруем только пулы потоков (не batch_writer)
-    const poolNames = Object.keys(data).filter(name => name !== 'batch_writer' && data[name].thread_pool);
+    const poolNames = Object.keys(data).filter(
+        name => name !== 'batch_writer' && data[name].thread_pool && data[name].meta_type !== 'router'
+    );
     const utilizationData = poolNames.map(name => data[name].thread_pool.pool_utilization);
     const maxUtilizationData = poolNames.map(name => data[name].thread_pool.max_concurrent_tasks / data[name].thread_pool.max_workers * 100);
       
@@ -188,11 +457,11 @@ function updateCharts(data) {
         data: {  
             labels: poolNames,  
             datasets: [{  
-                label: 'Pool Utilization %',  
+                label: 'Current Utilization %',  
                 data: utilizationData,  
                 backgroundColor: utilizationData.map(val => getGreenIntensity(val))  
             }, {  
-                label: 'Max Pool Utilization %',  
+                label: 'Historical Peak Utilization %',  
                 data: maxUtilizationData,  
                 backgroundColor: maxUtilizationData.map(val => getRedIntensity(val))  
             }]   
@@ -205,7 +474,9 @@ function updateCharts(data) {
         }  
     });  
     
-    const poolNames2 = Object.keys(data).filter(name => name !== 'batch_writer' && data[name].thread_pool);
+    const poolNames2 = Object.keys(data).filter(
+        name => name !== 'batch_writer' && data[name].thread_pool && data[name].meta_type !== 'router'
+    );
     
     // График времени выполнения
     const executionCtx = document.getElementById('executionChart').getContext('2d');
@@ -246,47 +517,137 @@ function updateCharts(data) {
 }  
   
 function updateTasksTable(data) {
-    const tbody = document.getElementById('tasks-tbody');
-    tbody.innerHTML = '';
-    
-    Object.entries(data).forEach(([poolName, poolData]) => {
+    const tabs = document.getElementById('poolTaskTabs');
+    const content = document.getElementById('poolTaskTabsContent');
+    tabs.innerHTML = '';
+    content.innerHTML = '';
+
+    const pools = Object.entries(data).filter(([poolName, poolData]) => {
+        if (poolName === 'batch_writer') return true;
+        return poolData.meta_type !== 'router' && Array.isArray(poolData.history);
+    });
+
+    if (pools.length === 0) {
+        content.innerHTML = '<p class="text-muted">No tasks data available</p>';
+        return;
+    }
+
+    pools.forEach(([poolName, poolData], index) => {
+        const tabId = `pool-task-tab-${index}`;
+        const paneId = `pool-task-pane-${index}`;
+        const isActive = index === 0;
+
+        const tabItem = document.createElement('li');
+        tabItem.className = 'nav-item';
+        tabItem.role = 'presentation';
+        const selectedTaskPoolTab = localStorage.getItem(XRAY_TASKS_POOL_TAB_KEY);
+        const isSelectedTab = selectedTaskPoolTab ? selectedTaskPoolTab === poolName : isActive;
+        tabItem.innerHTML = `
+            <button class="nav-link ${isActive ? 'active' : ''}" id="${tabId}" data-bs-toggle="pill" data-bs-target="#${paneId}" type="button" role="tab" aria-controls="${paneId}" aria-selected="${isActive ? 'true' : 'false'}">
+                ${poolName}
+            </button>
+        `;
+        const tabBtn = tabItem.querySelector('button');
+        if (tabBtn) {
+            tabBtn.classList.toggle('active', isSelectedTab);
+            tabBtn.setAttribute('aria-selected', isSelectedTab ? 'true' : 'false');
+            tabBtn.addEventListener('shown.bs.tab', () => {
+                localStorage.setItem(XRAY_TASKS_POOL_TAB_KEY, poolName);
+            });
+        }
+        tabs.appendChild(tabItem);
+
+        const pane = document.createElement('div');
+        pane.className = `tab-pane fade ${isSelectedTab ? 'show active' : ''}`;
+        pane.id = paneId;
+        pane.role = 'tabpanel';
+        pane.setAttribute('aria-labelledby', tabId);
+
+        let rowsHtml = '';
         if (poolName === 'batch_writer') {
-            // Специальная обработка для batch_writer
             const bw = poolData;
-            const row = tbody.insertRow();
-            row.innerHTML = `
-                <td><span class="badge bg-info">batch_writer</span></td>
-                <td>Batch Write</td>
-                <td>${(bw.execution_time.avg_seconds * 1000).toFixed(2)}ms (avg)</td>
-                <td><span class="badge ${bw.total_errors === 0 ? 'bg-success' : 'bg-warning'}">${bw.total_errors === 0 ? 'OK' : 'Errors: ' + bw.total_errors}</span></td>
-                <td>${bw.last_flush_time || 'Never'}</td>
+            rowsHtml += `
+                <tr>
+                    <td>batch_writer</td>
+                    <td>Batch Write</td>
+                    <td>${(bw.execution_time.avg_seconds * 1000).toFixed(2)}ms (avg)</td>
+                    <td><span class="badge ${bw.total_errors === 0 ? 'bg-success' : 'bg-warning'}">${bw.total_errors === 0 ? 'OK' : 'Errors: ' + bw.total_errors}</span></td>
+                    <td>${bw.last_flush_time || 'Never'}</td>
+                </tr>
             `;
             if (bw.last_error) {
-                const errorRow = tbody.insertRow();
-                errorRow.innerHTML = `
-                    <td><span class="badge bg-danger">batch_writer</span></td>
-                    <td>Last Error</td>
-                    <td colspan="2">${bw.last_error.substring(0, 100)}</td>
-                    <td>${bw.last_error_time || ''}</td>
+                rowsHtml += `
+                    <tr>
+                        <td>batch_writer</td>
+                        <td>Last Error</td>
+                        <td colspan="2">${bw.last_error.substring(0, 120)}</td>
+                        <td>${bw.last_error_time || ''}</td>
+                    </tr>
                 `;
             }
-        } else if (poolData.history) {
-            poolData.history.slice(-20).forEach(task => {
-                const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td><span class="badge bg-primary">${poolName}</span></td>
-                    <td>${task.task_name}</td>
-                    <td>${(task.duration * 1000).toFixed(2)}ms</td>
-                    <td><span class="badge ${task.success ? 'bg-success' : 'bg-danger'}">${task.success ? 'Success' : 'Failed'}</span></td>
-                    <td>${task.time}</td>
+        } else {
+            const history = poolData.history.slice(-20).reverse();
+            history.forEach(task => {
+                const taskName = task.task_name || '';
+                const owner =
+                    taskName.startsWith('proxy_')
+                        ? (`proxy:${taskName.split('_')[1] || 'unknown'}`)
+                        : (taskName.includes('_') ? taskName.split('_')[0] : 'unknown');
+                rowsHtml += `
+                    <tr>
+                        <td>${owner}</td>
+                        <td>${task.task_name}</td>
+                        <td>${(task.duration * 1000).toFixed(2)}ms</td>
+                        <td><span class="badge ${task.success ? 'bg-success' : 'bg-danger'}">${task.success ? 'Success' : 'Failed'}</span></td>
+                        <td>${task.time}</td>
+                    </tr>
                 `;
             });
         }
+
+        pane.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover table-striped table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Owner</th>
+                            <th>Task Name</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml || '<tr><td colspan="4" class="text-muted">No tasks</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        content.appendChild(pane);
+    });
+}
+
+function initMainTabsPersistence() {
+    const tabsRoot = document.getElementById('xrayPoolsTabs');
+    if (!tabsRoot) return;
+    const savedTabId = localStorage.getItem(XRAY_MAIN_TAB_KEY);
+    if (savedTabId) {
+        const tabBtn = document.querySelector(`#xrayPoolsTabs button[data-bs-target="${savedTabId}"]`);
+        if (tabBtn && window.bootstrap && bootstrap.Tab) {
+            bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+        }
+    }
+    tabsRoot.querySelectorAll('button[data-bs-toggle="tab"]').forEach(btn => {
+        btn.addEventListener('shown.bs.tab', (event) => {
+            const target = event.target.getAttribute('data-bs-target');
+            if (target) localStorage.setItem(XRAY_MAIN_TAB_KEY, target);
+        });
     });
 }
   
 // Обновление каждые 30 секунд  
 setInterval(updateThreadPoolsStats, 30000);  
+initMainTabsPersistence();
 updateThreadPoolsStats();  
 </script>  
 {% endblock %}
