@@ -1,8 +1,6 @@
 {% extends "xray_main.html" %}
 
 {% block tab %}
-<link rel="stylesheet" href="/xray/static/css/dataTables.dataTables.css">
-<script src="/xray/static/js/dataTables.js"></script>
     <div  class="table-responsive">
         <table id="props_stat" class="table table-hover table-striped">
             <thead>
@@ -50,9 +48,11 @@
         </table>
     </div>
     <script>
-        new DataTable('#props_stat', {
-            order: [[5, 'desc']],
-            stateSave: true
-        });
+        (function ($) {
+            $('#props_stat').DataTable({
+                order: [[5, 'desc']],
+                stateSave: true
+            });
+        })(jQuery);
     </script>
 {% endblock %}

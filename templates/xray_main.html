@@ -1,4 +1,7 @@
 {% extends "layouts/module_admin.html" %}
+{% block stylesheets %}
+<link rel="stylesheet" href="{{ config.ASSETS_ROOT }}/plugins/datatables/css/dataTables.bootstrap5.min.css">
+{% endblock %}
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="xray">XRAY</a></li>
 {% endblock %}
@@ -44,6 +47,8 @@
 </ul>
 <div class="tab-content mt-3" id="myTabContent">
   <div class="tab-pane fade show active">
+  <script src="{{ config.ASSETS_ROOT }}/plugins/datatables/js/dataTables.min.js"></script>
+  <script src="{{ config.ASSETS_ROOT }}/plugins/datatables/js/dataTables.bootstrap5.min.js"></script>
   {% block tab %}{% endblock %}
   </div>
 </div>

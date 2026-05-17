@@ -1,9 +1,6 @@
 {% extends "xray_main.html" %}
 
 {% block tab %}
-<link rel="stylesheet" href="/xray/static/css/dataTables.dataTables.css">
-<script src="/xray/static/js/dataTables.js"></script>
-<script src="/xray/static/js/file-size.js"></script>
 <div class="table-responsive">
     <table id="cleared_tables" class="table table-hover table-striped">
         <thead>
@@ -35,9 +32,11 @@
     </table>
 </div>
 <script>
-    new DataTable('#cleared_tables', {
-        order: [[0, 'asc']],
-        stateSave: true,
-    });
+    (function ($) {
+        $('#cleared_tables').DataTable({
+            order: [[0, 'asc']],
+            stateSave: true,
+        });
+    })(jQuery);
 </script>
 {% endblock %}

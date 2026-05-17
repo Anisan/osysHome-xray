@@ -1,9 +1,7 @@
 {% extends "xray_main.html" %}
 
 {% block tab %}
-<link rel="stylesheet" href="/xray/static/css/dataTables.dataTables.css">
-<script src="/xray/static/js/dataTables.js"></script>
-<script src="/xray/static/js/file-size.js"></script>
+<script src="{{ url_for('xray.static', filename='js/file-size.js') }}"></script>
 <div class="container-fluid">  
     <div class="row">
         <!-- Левая колонка: Database Information -->
@@ -307,12 +305,14 @@ setInterval(updatePoolStats, 30000);
 updatePoolStats();  
 </script>
 <script>
-    new DataTable('#dbtables', {
-        order: [[0, 'asc']],
-        stateSave: true,
-        columnDefs: [
-            { type: 'file-size', targets: 2 }
-        ]
-    });
+    (function ($) {
+        $('#dbtables').DataTable({
+            order: [[0, 'asc']],
+            stateSave: true,
+            columnDefs: [
+                { type: 'file-size', targets: 2 }
+            ]
+        });
+    })(jQuery);
 </script>
 {% endblock %}
