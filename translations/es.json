@@ -1,0 +1,9 @@
+{
+  "Flask version": "Versión matraz",
+  "Python executable": "ejecutable de Python",
+  "Python info": "Información de Python",
+  "Python path": "Ruta de Python",
+  "Python version": "Versión de Python",
+  "Venv": "Venv",
+  "Venv path": "camino venv"
+}

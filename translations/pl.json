@@ -1,0 +1,9 @@
+{
+  "Flask version": "Wersja flaszkowa",
+  "Python executable": "Plik wykonywalny Pythona",
+  "Python info": "Informacje o Pythonie",
+  "Python path": "Ścieżka Pythona",
+  "Python version": "Wersja Pythona",
+  "Venv": "Venv",
+  "Venv path": "Ścieżka Venva"
+}

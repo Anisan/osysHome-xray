@@ -1,0 +1,9 @@
+{
+  "Flask version": "Версія Flask",
+  "Python executable": "Виконуваний файл Python",
+  "Python info": "Інформація про Python",
+  "Python path": "Шлях до Python",
+  "Python version": "Версія Python",
+  "Venv": "Віртуальне оточення",
+  "Venv path": "Шлях до віртуального оточення"
+}

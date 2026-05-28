@@ -1,0 +1,9 @@
+{
+  "Flask version": "烧瓶版",
+  "Python executable": "Python可执行文件",
+  "Python info": "Python信息",
+  "Python path": "Python路径",
+  "Python version": "Python版本",
+  "Venv": "文夫",
+  "Venv path": "文路径"
+}

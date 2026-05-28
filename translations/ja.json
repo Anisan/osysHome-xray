@@ -1,0 +1,9 @@
+{
+  "Flask version": "フラスコのバージョン",
+  "Python executable": "Python 実行可能ファイル",
+  "Python info": "Python 情報",
+  "Python path": "Python パス",
+  "Python version": "Pythonのバージョン",
+  "Venv": "ヴェンヴ",
+  "Venv path": "ヴェンヴパス"
+}

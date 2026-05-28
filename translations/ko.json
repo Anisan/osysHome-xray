@@ -1,0 +1,9 @@
+{
+  "Flask version": "플라스크 버전",
+  "Python executable": "Python 실행 파일",
+  "Python info": "파이썬 정보",
+  "Python path": "파이썬 경로",
+  "Python version": "파이썬 버전",
+  "Venv": "벤브",
+  "Venv path": "Venv 경로"
+}

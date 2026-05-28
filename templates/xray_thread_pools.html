@@ -26,7 +26,13 @@
             <div class="row g-2">
                 <div class="col-md-6">
                     <div class="card h-100">
-                        <div class="card-header">Router Insights</div>
+                        <div class="card-header d-flex justify-content-between align-items-center py-2">
+                            <span>Router Insights</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <small class="text-muted" id="router-metrics-refresh-timer">Next update: 30s</small>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="router-metrics-refresh-btn" title="Refresh now" aria-label="Refresh now">&#8635;</button>
+                            </div>
+                        </div>
                         <div class="card-body" id="router-metrics">
                         <!-- Динамически заполняется JavaScript -->
                         </div>
@@ -34,7 +40,13 @@
                 </div>
                 <div class="col-md-6">
                     <div class="card h-100">
-                        <div class="card-header">Batch Writer Properties</div>
+                        <div class="card-header d-flex justify-content-between align-items-center py-2">
+                            <span>Batch Writer Properties</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <small class="text-muted" id="batch-writer-refresh-timer">Next update: 30s</small>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="batch-writer-refresh-btn" title="Refresh now" aria-label="Refresh now">&#8635;</button>
+                            </div>
+                        </div>
                         <div class="card-body" id="batch-writer-metrics">
                         <!-- Динамически заполняется JavaScript -->
                         </div>
@@ -96,9 +108,32 @@
 </div>  
   
 <script>  
-let utilizationChart, executionChart;  
+let utilizationChart, executionChart;
+let overviewCharts = {};
 const XRAY_MAIN_TAB_KEY = 'xray.thread_pools.active_tab';
 const XRAY_TASKS_POOL_TAB_KEY = 'xray.thread_pools.tasks.active_pool_tab';
+const THREAD_POOLS_REFRESH_MS = 30000;
+const OVERVIEW_CARDS = {
+    batch_writer: {
+        timerId: 'batch-writer-refresh-timer',
+        btnId: 'batch-writer-refresh-btn',
+        chartPrefix: 'batch-writer-',
+        nextRefreshAt: Date.now() + THREAD_POOLS_REFRESH_MS,
+        autoRefreshTimer: null,
+        loading: false
+    },
+    router: {
+        timerId: 'router-metrics-refresh-timer',
+        btnId: 'router-metrics-refresh-btn',
+        chartPrefix: 'router-',
+        nextRefreshAt: Date.now() + THREAD_POOLS_REFRESH_MS,
+        autoRefreshTimer: null,
+        loading: false
+    }
+};
+
+let poolsTabRefreshTimer = null;
+let refreshCountdownTimer = null;
 
 function formatPeakAge(peakTimestampMs) {
     if (!peakTimestampMs) return 'never';
@@ -113,20 +148,249 @@ function formatPeakAge(peakTimestampMs) {
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
 }
-  
-function updateThreadPoolsStats() {  
-    fetch('/api/xray/thread_pools/stats')  
-        .then(response => response.json())  
-        .then(data => {  
-            updatePoolsMetrics(data);  
-            updateCharts(data);  
-            updateTasksTable(data);  
-        })  
-        .catch(error => console.error('Error:', error));  
-}  
-  
-function updatePoolsMetrics(data) {
-    // Обновление Batch Writer в отдельной карточке
+
+function destroyOverviewChartsByPrefix(prefix) {
+    Object.keys(overviewCharts).forEach(id => {
+        if (id.startsWith(prefix)) {
+            overviewCharts[id].destroy();
+            delete overviewCharts[id];
+        }
+    });
+}
+
+function createOverviewChart(canvasId, config) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    if (overviewCharts[canvasId]) {
+        overviewCharts[canvasId].destroy();
+    }
+    const chart = new Chart(canvas.getContext('2d'), {
+        ...config,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } } },
+            ...(config.options || {})
+        }
+    });
+    overviewCharts[canvasId] = chart;
+    return chart;
+}
+
+function updateBatchWriterCharts(bw) {
+    const history = Array.isArray(bw.flush_history) ? bw.flush_history : [];
+    if (history.length === 0) {
+        return;
+    }
+
+    const labels = history.map((_, i) => String(i + 1));
+    const durationsMs = history.map(h => (h.duration_seconds || 0) * 1000);
+    const pointColors = history.map(h => {
+        if (!h.success) return 'rgba(220, 53, 69, 0.9)';
+        if ((h.batch_size || 0) === 0) return 'rgba(108, 117, 125, 0.55)';
+        return 'rgba(13, 110, 253, 0.85)';
+    });
+    const pointRadius = history.length > 60 ? 2 : 4;
+
+    createOverviewChart('batch-writer-history-duration-chart', {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Duration (ms)',
+                data: durationsMs,
+                borderColor: 'rgba(13, 110, 253, 0.5)',
+                backgroundColor: 'rgba(13, 110, 253, 0.08)',
+                pointBackgroundColor: pointColors,
+                pointBorderColor: pointColors,
+                pointRadius,
+                fill: true,
+                tension: 0.15
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        afterLabel(ctx) {
+                            const entry = history[ctx.dataIndex];
+                            if (!entry) return '';
+                            const lines = [
+                                (entry.batch_size || 0) === 0 ? 'Empty flush' : `Batch: ${entry.batch_size}`,
+                                `Values: ${entry.values_count}`,
+                                `History: ${entry.history_count}`,
+                                entry.success ? 'OK' : 'Failed'
+                            ];
+                            if (entry.error) {
+                                lines.push(String(entry.error).substring(0, 80));
+                            }
+                            return lines;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Flush # (oldest → newest)' }
+                },
+                y: { beginAtZero: true, title: { display: true, text: 'ms' } }
+            }
+        }
+    });
+
+    createOverviewChart('batch-writer-history-throughput-chart', {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Batch items',
+                data: history.map(h => h.batch_size || 0),
+                borderColor: 'rgba(108, 117, 125, 0.9)',
+                backgroundColor: 'rgba(108, 117, 125, 0.05)',
+                pointRadius: pointRadius,
+                tension: 0.15
+            }, {
+                label: 'Values updated',
+                data: history.map(h => h.values_count || 0),
+                borderColor: 'rgba(25, 135, 84, 0.9)',
+                backgroundColor: 'rgba(25, 135, 84, 0.05)',
+                pointRadius: pointRadius,
+                tension: 0.15
+            }, {
+                label: 'History rows',
+                data: history.map(h => h.history_count || 0),
+                borderColor: 'rgba(255, 193, 7, 0.9)',
+                backgroundColor: 'rgba(255, 193, 7, 0.05)',
+                pointRadius: pointRadius,
+                tension: 0.15
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    title: { display: true, text: 'Flush # (oldest → newest)' }
+                },
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function updateRouterCharts(routerEntries) {
+    // charts for Router Insights intentionally disabled as they were not informative enough
+    return;
+}
+
+function formatRefreshCountdown(remainingMs) {
+    const sec = Math.max(0, Math.ceil(remainingMs / 1000));
+    if (sec >= 60) {
+        const min = Math.floor(sec / 60);
+        const rest = sec % 60;
+        return `${min}:${String(rest).padStart(2, '0')}`;
+    }
+    return `${sec}s`;
+}
+
+function updateRefreshCountdownUI(cardKey) {
+    const card = OVERVIEW_CARDS[cardKey];
+    const el = document.getElementById(card.timerId);
+    if (!el) return;
+    el.textContent = card.loading
+        ? 'Updating…'
+        : `Next: ${formatRefreshCountdown(card.nextRefreshAt - Date.now())}`;
+}
+
+function updateAllRefreshCountdownsUI() {
+    Object.keys(OVERVIEW_CARDS).forEach(updateRefreshCountdownUI);
+}
+
+function setOverviewCardButtonDisabled(cardKey, disabled) {
+    const btn = document.getElementById(OVERVIEW_CARDS[cardKey].btnId);
+    if (btn) btn.disabled = disabled;
+}
+
+function scheduleOverviewCardAutoRefresh(cardKey) {
+    const card = OVERVIEW_CARDS[cardKey];
+    if (card.autoRefreshTimer) clearTimeout(card.autoRefreshTimer);
+    card.nextRefreshAt = Date.now() + THREAD_POOLS_REFRESH_MS;
+    updateRefreshCountdownUI(cardKey);
+    card.autoRefreshTimer = setTimeout(() => refreshOverviewCard(cardKey, false), THREAD_POOLS_REFRESH_MS);
+}
+
+function fetchThreadPoolsStats() {
+    return fetch('/api/xray/thread_pools/stats').then(response => response.json());
+}
+
+function refreshOverviewCard(cardKey, manual) {
+    const card = OVERVIEW_CARDS[cardKey];
+    if (card.loading) return;
+    if (manual && card.autoRefreshTimer) {
+        clearTimeout(card.autoRefreshTimer);
+        card.autoRefreshTimer = null;
+    }
+    card.loading = true;
+    setOverviewCardButtonDisabled(cardKey, true);
+    updateRefreshCountdownUI(cardKey);
+
+    fetchThreadPoolsStats()
+        .then(data => {
+            if (cardKey === 'batch_writer') {
+                updateBatchWriterMetrics(data);
+            } else if (cardKey === 'router') {
+                updateRouterMetrics(data);
+            }
+        })
+        .catch(error => console.error(`Error refreshing ${cardKey}:`, error))
+        .finally(() => {
+            card.loading = false;
+            setOverviewCardButtonDisabled(cardKey, false);
+            scheduleOverviewCardAutoRefresh(cardKey);
+        });
+}
+
+function refreshPoolsTabStats() {
+    fetchThreadPoolsStats()
+        .then(data => {
+            updatePoolsTabMetrics(data);
+            updateCharts(data);
+            updateTasksTable(data);
+        })
+        .catch(error => console.error('Error refreshing pools tab:', error));
+}
+
+function schedulePoolsTabAutoRefresh() {
+    if (poolsTabRefreshTimer) clearTimeout(poolsTabRefreshTimer);
+    poolsTabRefreshTimer = setTimeout(() => {
+        refreshPoolsTabStats();
+        schedulePoolsTabAutoRefresh();
+    }, THREAD_POOLS_REFRESH_MS);
+}
+
+function initOverviewRefreshControls() {
+    Object.keys(OVERVIEW_CARDS).forEach(cardKey => {
+        const btn = document.getElementById(OVERVIEW_CARDS[cardKey].btnId);
+        if (btn) btn.addEventListener('click', () => refreshOverviewCard(cardKey, true));
+        scheduleOverviewCardAutoRefresh(cardKey);
+    });
+    if (refreshCountdownTimer) clearInterval(refreshCountdownTimer);
+    refreshCountdownTimer = setInterval(updateAllRefreshCountdownsUI, 1000);
+}
+
+function refreshAllThreadPoolsStats() {
+    fetchThreadPoolsStats()
+        .then(data => {
+            updateBatchWriterMetrics(data);
+            updateRouterMetrics(data);
+            updatePoolsTabMetrics(data);
+            updateCharts(data);
+            updateTasksTable(data);
+        })
+        .catch(error => console.error('Error:', error));
+}
+function updateBatchWriterMetrics(data) {
+    destroyOverviewChartsByPrefix(OVERVIEW_CARDS.batch_writer.chartPrefix);
+
     const batchWriterContainer = document.getElementById('batch-writer-metrics');
     if (data.batch_writer) {
         const bw = data.batch_writer;
@@ -205,13 +469,29 @@ function updatePoolsMetrics(data) {
                         <small class="text-muted">${bw.last_error_time || ''}</small>
                     </div>
                 ` : ''}
+
+                <div class="mt-2">
+                    <small class="text-muted d-block mb-1">Flush history (last ${(bw.flush_history || []).length} / 100)</small>
+                    ${(bw.flush_history || []).length > 0 ? `
+                    <div class="mb-2" style="height: 170px;">
+                        <canvas id="batch-writer-history-duration-chart"></canvas>
+                    </div>
+                    <div style="height: 170px;">
+                        <canvas id="batch-writer-history-throughput-chart"></canvas>
+                    </div>
+                    ` : '<p class="text-muted small mb-0">No flush history yet — charts appear after the first successful flush.</p>'}
+                </div>
             </div>
         `;
+        updateBatchWriterCharts(bw);
     } else {
         batchWriterContainer.innerHTML = '<p class="text-muted">No data available</p>';
     }
-    
-    // Обновление Router Insights
+}
+
+function updateRouterMetrics(data) {
+    destroyOverviewChartsByPrefix(OVERVIEW_CARDS.router.chartPrefix);
+
     const routerContainer = document.getElementById('router-metrics');
     const routerEntries = Object.entries(data).filter(([poolName, poolData]) => poolData && poolData.meta_type === 'router');
     if (routerEntries.length > 0) {
@@ -369,11 +649,13 @@ function updatePoolsMetrics(data) {
             `;
         });
         routerContainer.innerHTML = html;
+        updateRouterCharts(routerEntries);
     } else {
         routerContainer.innerHTML = '<p class="text-muted">No router data</p>';
     }
+}
 
-    // Обновление Thread Pools Monitoring
+function updatePoolsTabMetrics(data) {
     const container = document.getElementById('pools-metrics');
     container.innerHTML = '';
     
@@ -645,9 +927,9 @@ function initMainTabsPersistence() {
     });
 }
   
-// Обновление каждые 30 секунд  
-setInterval(updateThreadPoolsStats, 30000);  
+initOverviewRefreshControls();
 initMainTabsPersistence();
-updateThreadPoolsStats();  
+refreshAllThreadPoolsStats();
+schedulePoolsTabAutoRefresh();
 </script>  
 {% endblock %}
