@@ -355,10 +355,14 @@ class xray(BasePlugin):
     def widgets(self):
         return [
             {"name":"default","description":"Statistics"},
-            {"name":"batch_writer","description":"Statistics batch writer"}
+            {"name":"batch_writer","description":"Statistics batch writer"},
+            {"name":"router_insights","description":"Router Insights"},
         ]
 
     def widget(self, name:str = None):
+        if name == 'router_insights':
+            return render_template("widget_router_insights.html")
+
         if name == 'batch_writer':
             from app.core.main.ObjectManager import _batch_writer
             stats = None

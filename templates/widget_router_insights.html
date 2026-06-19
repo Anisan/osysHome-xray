@@ -1,0 +1,147 @@
+<div id="xray-router-insights-widget" class="text-start">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h4 class="mb-0">Router Insights</h4>
+        <div class="d-flex align-items-center gap-2">
+            <small class="text-muted" id="router-widget-refresh-timer">Next: 30s</small>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="router-widget-refresh-btn" title="Refresh now" aria-label="Refresh now">&#8635;</button>
+        </div>
+    </div>
+    <div id="router-widget-metrics">
+        <p class="text-muted mb-0">Loading…</p>
+    </div>
+</div>
+
+<script>
+(function () {
+    const REFRESH_MS = 30000;
+    let nextRefreshAt = Date.now() + REFRESH_MS;
+    let autoRefreshTimer = null;
+    let countdownTimer = null;
+    let loading = false;
+
+    function formatRefreshCountdown(remainingMs) {
+        const sec = Math.max(0, Math.ceil(remainingMs / 1000));
+        if (sec >= 60) {
+            const min = Math.floor(sec / 60);
+            const rest = sec % 60;
+            return `${min}:${String(rest).padStart(2, '0')}`;
+        }
+        return `${sec}s`;
+    }
+
+    function updateCountdownUI() {
+        const el = document.getElementById('router-widget-refresh-timer');
+        if (!el) return;
+        el.textContent = loading
+            ? 'Updating…'
+            : `Next: ${formatRefreshCountdown(nextRefreshAt - Date.now())}`;
+    }
+
+    function scheduleAutoRefresh() {
+        if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+        nextRefreshAt = Date.now() + REFRESH_MS;
+        updateCountdownUI();
+        autoRefreshTimer = setTimeout(() => refreshRouterWidget(false), REFRESH_MS);
+    }
+
+    function renderRouterMetrics(data) {
+        const container = document.getElementById('router-widget-metrics');
+        if (!container) return;
+
+        const routerEntries = Object.entries(data).filter(([, poolData]) => poolData && poolData.meta_type === 'router');
+        if (routerEntries.length === 0) {
+            container.innerHTML = '<p class="text-muted mb-0">No router data</p>';
+            return;
+        }
+
+        let html = '';
+        routerEntries.forEach(([poolName, poolData]) => {
+            const owners = (poolData.router && poolData.router.owners) || {};
+            const ownerItems = Object.entries(owners);
+
+            const ownersTableRows = ownerItems
+                .sort((a, b) => (b[1].avg_duration_ms || 0) - (a[1].avg_duration_ms || 0))
+                .map(([name, owner]) => {
+                    const poolBadge =
+                        owner.preferred_pool === 'trusted'
+                            ? 'bg-success'
+                            : owner.preferred_pool === 'medium'
+                                ? 'bg-warning text-dark'
+                                : 'bg-secondary';
+                    return `
+                        <tr>
+                            <td class="text-truncate" style="max-width: 180px;" title="${name}">${name}</td>
+                            <td><span class="badge ${poolBadge}">${owner.preferred_pool || 'safe'}</span></td>
+                            <td>${owner.inflight || 0}</td>
+                            <td>${Number(owner.avg_duration_ms || 0).toFixed(3)}</td>
+                            <td>${owner.success_count || 0}</td>
+                            <td>${owner.fail_count || 0}</td>
+                        </tr>
+                    `;
+                })
+                .join('');
+
+            html += `
+                <div class="mb-3">
+                    <div class="fw-bold mb-2">${poolName}</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Owner</th>
+                                    <th>Pool</th>
+                                    <th>Running now</th>
+                                    <th>Avg ms</th>
+                                    <th>Ok</th>
+                                    <th>Fail</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${ownersTableRows || '<tr><td colspan="6" class="text-muted">No owners data</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function refreshRouterWidget(manual) {
+        if (loading) return;
+        if (manual && autoRefreshTimer) {
+            clearTimeout(autoRefreshTimer);
+            autoRefreshTimer = null;
+        }
+        loading = true;
+        const btn = document.getElementById('router-widget-refresh-btn');
+        if (btn) btn.disabled = true;
+        updateCountdownUI();
+
+        fetch('/api/xray/thread_pools/stats')
+            .then(response => response.json())
+            .then(renderRouterMetrics)
+            .catch(error => {
+                console.error('Error refreshing router insights widget:', error);
+                const container = document.getElementById('router-widget-metrics');
+                if (container) {
+                    container.innerHTML = '<p class="text-danger mb-0">Failed to load router data</p>';
+                }
+            })
+            .finally(() => {
+                loading = false;
+                if (btn) btn.disabled = false;
+                scheduleAutoRefresh();
+            });
+    }
+
+    const btn = document.getElementById('router-widget-refresh-btn');
+    if (btn) btn.addEventListener('click', () => refreshRouterWidget(true));
+
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(updateCountdownUI, 1000);
+
+    refreshRouterWidget(false);
+})();
+</script>
