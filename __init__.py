@@ -3,7 +3,7 @@ XRAY
 """
 import json
 import os
-from app.core.utils import CustomJSONEncoder
+from app.core.utilities.json_encoding import CustomJSONEncoder
 import sys
 import subprocess
 import platform
