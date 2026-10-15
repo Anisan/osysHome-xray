@@ -1,0 +1,34 @@
+{% from "_xray_resource_card.html" import resource_card with context %}
+{% set wid = 'xray-res-w-' ~ metric %}
+{% set id_prefix = wid ~ '-' %}
+
+<link rel="stylesheet" href="{{ url_for('xray.static', filename='css/xray_resources.css') }}">
+
+{# Same markup as Resources tab cards — only id_prefix differs for uniqueness. #}
+<div class="xray-res xray-res-widget" id="{{ wid }}">
+    {{ resource_card(metric, id_prefix=id_prefix) }}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('xray.static', filename='js/xray_resources.js') }}"></script>
+<script>
+(function () {
+    var root = document.getElementById({{ wid|tojson }});
+    if (!root || !window.XrayResources) return;
+    XrayResources.mount(root, {
+        idPrefix: {{ id_prefix|tojson }},
+        pollMs: 3000,
+        enablePresets: false,
+        i18n: {
+            download: {{ _('Download')|tojson }},
+            upload: {{ _('Upload')|tojson }},
+            read: {{ _('Read')|tojson }},
+            write: {{ _('Write')|tojson }},
+            process: {{ _('process')|tojson }},
+            nicNetns: {{ _('NIC / netns')|tojson }},
+            throughputNA: {{ _('throughput N/A')|tojson }},
+            updated: {{ _('Updated')|tojson }}
+        }
+    });
+})();
+</script>

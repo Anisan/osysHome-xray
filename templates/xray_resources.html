@@ -1,0 +1,71 @@
+{% extends "xray_main.html" %}
+{% from "_xray_resource_card.html" import resource_card with context %}
+
+{% block tab %}
+<link rel="stylesheet" href="{{ url_for('xray.static', filename='css/xray_resources.css') }}">
+
+<div class="xray-res container-fluid px-0" id="xray-resources-root">
+    {% if not resources_available %}
+    <div class="alert alert-warning">
+        {{ _('Resource monitoring unavailable. Install psutil and restart osysHome.') }}
+    </div>
+    {% endif %}
+
+    <div class="xr-header">
+        <div>
+            <h5>{{ _('osysHome process resources') }}</h5>
+            <small class="text-muted" id="resources-last-update">—</small>
+        </div>
+        <div class="xr-preset btn-group" role="group" aria-label="{{ _('View preset') }}">
+            <button type="button" class="btn btn-outline-secondary" data-preset="values">{{ _('Values') }}</button>
+            <button type="button" class="btn btn-outline-secondary" data-preset="sparks">{{ _('Sparks') }}</button>
+            <button type="button" class="btn btn-outline-secondary" data-preset="history">{{ _('History') }}</button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">{{ resource_card('cpu') }}</div>
+        <div class="col-6 col-lg-3">{{ resource_card('memory') }}</div>
+        <div class="col-6 col-lg-3">{{ resource_card('disk') }}</div>
+        <div class="col-6 col-lg-3">{{ resource_card('threads') }}</div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-8">{{ resource_card('network') }}</div>
+        <div class="col-lg-4">{{ resource_card('connections') }}</div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">{{ resource_card('fds') }}</div>
+        <div class="col-md-3">{{ resource_card('children') }}</div>
+        <div class="col-md-3">{{ resource_card('listen') }}</div>
+        <div class="col-md-3">{{ resource_card('remotes') }}</div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">{{ resource_card('uptime') }}</div>
+        <div class="col-md-4">{{ resource_card('process') }}</div>
+        <div class="col-md-4">{{ resource_card('diskio') }}</div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('xray.static', filename='js/xray_resources.js') }}"></script>
+<script>
+XrayResources.mount(document.getElementById('xray-resources-root'), {
+    idPrefix: '',
+    pollMs: 3000,
+    enablePresets: true,
+    i18n: {
+        download: {{ _('Download')|tojson }},
+        upload: {{ _('Upload')|tojson }},
+        read: {{ _('Read')|tojson }},
+        write: {{ _('Write')|tojson }},
+        process: {{ _('process')|tojson }},
+        nicNetns: {{ _('NIC / netns')|tojson }},
+        throughputNA: {{ _('throughput N/A')|tojson }},
+        updated: {{ _('Updated')|tojson }}
+    }
+});
+</script>
+{% endblock %}

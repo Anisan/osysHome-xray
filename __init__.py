@@ -24,18 +24,23 @@ from app.core.models.Plugins import Notify
 from app.core.lib.constants import CategoryNotify
 from app.api import api
 from plugins.xray.utils.pool_monitor import DatabasePoolMonitor
+from plugins.xray.utils.resource_monitor import ResourceMonitor
 from app.core.lib.object import updateProperty
+from app.core.lib.common import writeSystemStatsMetric, incrementSystemStatsMetric
+from app.core.lib.constants import PropertyType
 
 class xray(BasePlugin):
 
     def __init__(self, app):
         super().__init__(app, __name__)
         self.title = "XRAY"
-        self.version = '0.1'
+        self.version = '1.14'
         self.description = """Xray view system"""
         self.category = "System"
         self.author = "Eraser"
         self.actions = ["widget"]
+        self._pool_monitor = None
+        self._resource_monitor = None
 
         from plugins.xray.api import create_api_ns
         api_ns = create_api_ns(self)
@@ -43,12 +48,28 @@ class xray(BasePlugin):
 
     def initialization(self):
         from app.database import engine
-        self._pool_monitor = DatabasePoolMonitor(engine, self.logger)
-        interval = 5
         from app.configuration import Config
-        if Config.DEBUG:
-            interval = 1
-        self._pool_monitor.start_monitoring(interval)
+        try:
+            self._pool_monitor = DatabasePoolMonitor(engine, self.logger, plugin_name=self.name)
+            interval = 1 if Config.DEBUG else 5
+            self._pool_monitor.start_monitoring(interval)
+        except Exception as ex:
+            self.logger.error("Не удалось запустить мониторинг пула БД: %s", ex)
+
+        self._ensure_resource_monitor()
+
+    def _ensure_resource_monitor(self):
+        """Создать и запустить ResourceMonitor, если ещё не инициализирован."""
+        if self._resource_monitor is not None:
+            return self._resource_monitor
+        try:
+            from app.configuration import Config
+            self._resource_monitor = ResourceMonitor(self.logger)
+            resource_interval = 1 if Config.DEBUG else 2
+            self._resource_monitor.start_monitoring(resource_interval)
+        except Exception as ex:
+            self.logger.error("Не удалось запустить мониторинг ресурсов: %s", ex)
+        return self._resource_monitor
 
     def get_pool_stats(self):
         """API для получения текущей статистики пула"""
@@ -60,6 +81,27 @@ class xray(BasePlugin):
         """API для получения истории статистики пула"""
         if self._pool_monitor:
             return self._pool_monitor.get_stats_history(minutes)
+        return []
+
+    def get_db_info(self):
+        """Public wrapper for Database tab / widget info."""
+        return self.__get_db_info()
+
+    def get_resource_stats(self):
+        """Current osysHome process resource snapshot."""
+        monitor = self._ensure_resource_monitor()
+        if monitor:
+            latest = monitor.get_latest()
+            if latest is not None:
+                return latest
+            return monitor.get_resource_stats()
+        return None
+
+    def get_resource_history(self, minutes: int = 30):
+        """In-memory resource sample history."""
+        monitor = self._ensure_resource_monitor()
+        if monitor:
+            return monitor.get_stats_history(minutes)
         return []
 
     def admin(self, request):
@@ -311,6 +353,13 @@ class xray(BasePlugin):
                 'tab': tab,
             }
             return render_template("xray_system.html", **content)
+        elif tab == "resources":
+            monitor = self._ensure_resource_monitor()
+            content = {
+                "tab": tab,
+                "resources_available": bool(monitor and monitor.available),
+            }
+            return render_template("xray_resources.html", **content)
         elif tab == "analytics":
             content = {
                 "tab": tab,
@@ -352,14 +401,43 @@ class xray(BasePlugin):
             self.logger.exception(e)
             return []
 
-    def widgets(self):
-        return [
-            {"name":"default","description":"Statistics"},
-            {"name":"batch_writer","description":"Statistics batch writer"},
-            {"name":"router_insights","description":"Router Insights"},
-        ]
+    _RESOURCE_WIDGETS = {
+        "resource_cpu": {"metric": "cpu", "title": "CPU", "icon": "fa-microchip", "description": "Resources: CPU"},
+        "resource_memory": {"metric": "memory", "title": "Memory", "icon": "fa-memory", "description": "Resources: Memory"},
+        "resource_disk": {"metric": "disk", "title": "Disk", "icon": "fa-hdd", "description": "Resources: Disk"},
+        "resource_threads": {"metric": "threads", "title": "Threads", "icon": "fa-stream", "description": "Resources: Threads"},
+        "resource_network": {"metric": "network", "title": "Network throughput", "icon": "fa-network-wired", "description": "Resources: Network"},
+        "resource_connections": {"metric": "connections", "title": "Connections", "icon": "fa-plug", "description": "Resources: Connections"},
+        "resource_fds": {"metric": "fds", "title": "File descriptors", "icon": "fa-folder-open", "description": "Resources: file descriptors"},
+        "resource_children": {"metric": "children", "title": "Children", "icon": "fa-sitemap", "description": "Resources: child processes"},
+        "resource_listen": {"metric": "listen", "title": "Listen ports", "icon": "fa-ethernet", "description": "Resources: listen ports"},
+        "resource_remotes": {"metric": "remotes", "title": "Top remotes", "icon": "fa-project-diagram", "description": "Resources: top remotes"},
+        "resource_uptime": {"metric": "uptime", "title": "Uptime", "icon": "fa-clock", "description": "Resources: Uptime"},
+        "resource_process": {"metric": "process", "title": "Process", "icon": "fa-server", "description": "Resources: Process memory"},
+        "resource_diskio": {"metric": "diskio", "title": "Disk I/O", "icon": "fa-exchange-alt", "description": "Resources: Disk I/O"},
+    }
 
-    def widget(self, name:str = None):
+    _DATABASE_WIDGETS = {
+        "db_info": {"kind": "info", "description": "Database: Information"},
+        "db_pool_active": {"kind": "active", "description": "Database: Active connections"},
+        "db_pool_health": {"kind": "health", "description": "Database: Pool health"},
+        "db_pool_overflow": {"kind": "overflow", "description": "Database: Overflow"},
+        "db_pool_history": {"kind": "history", "description": "Database: Pool usage history"},
+    }
+
+    def widgets(self):
+        items = [
+            {"name": "default", "description": "Statistics"},
+            {"name": "batch_writer", "description": "Statistics batch writer"},
+            {"name": "router_insights", "description": "Router Insights"},
+        ]
+        for key, meta in self._RESOURCE_WIDGETS.items():
+            items.append({"name": key, "description": meta["description"]})
+        for key, meta in self._DATABASE_WIDGETS.items():
+            items.append({"name": key, "description": meta["description"]})
+        return items
+
+    def widget(self, name: str = None):
         if name == 'router_insights':
             return render_template("widget_router_insights.html")
 
@@ -372,6 +450,22 @@ class xray(BasePlugin):
                 self.logger.exception(exc)
             return render_template("widget_batch_writer.html", stats=stats)
 
+        if name in self._RESOURCE_WIDGETS:
+            meta = self._RESOURCE_WIDGETS[name]
+            return render_template(
+                "widget_resource_metric.html",
+                metric=meta["metric"],
+                title=meta["title"],
+                icon=meta["icon"],
+            )
+
+        if name in self._DATABASE_WIDGETS:
+            meta = self._DATABASE_WIDGETS[name]
+            return render_template(
+                "widget_database.html",
+                kind=meta["kind"],
+            )
+
         content = {}
         services_count = 0
         service_work = 0
@@ -382,6 +476,13 @@ class xray(BasePlugin):
                     service_work = service_work + 1
         content['services'] = {"count": services_count, "alive": service_work, "stopped": services_count - service_work}
         content['objects'] = len(objects_storage.items())
+        try:
+            writeSystemStatsMetric(self.name, "services_total", services_count, prop_type=PropertyType.Integer)
+            writeSystemStatsMetric(self.name, "services_alive", service_work, prop_type=PropertyType.Integer)
+            writeSystemStatsMetric(self.name, "services_stopped", services_count - service_work, prop_type=PropertyType.Integer)
+            writeSystemStatsMetric(self.name, "objects_count", content['objects'], prop_type=PropertyType.Integer)
+        except Exception as exc:
+            self.logger.debug("SystemStats widget publish failed: %s", exc)
         return render_template("widget_xray.html",**content)
 
     def __get_table_info(self):

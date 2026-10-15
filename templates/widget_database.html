@@ -1,0 +1,309 @@
+{% set wid = 'xray-db-w-' ~ kind %}
+<style>
+.xray-db-widget {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+.widget-card:has(.xray-db-widget) {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+.xray-db-widget .card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: 0;
+}
+.xray-db-widget .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+.xray-db-widget .xray-db-chart-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 120px;
+}
+.xray-db-widget .xray-db-chart-wrap canvas {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+}
+.xray-db-widget.xray-db-metric .card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+}
+.xray-db-widget .xray-db-metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0.25rem 0;
+}
+</style>
+
+{% if kind == 'info' %}
+<div id="{{ wid }}" class="xray-db-widget text-start">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <a href="admin/xray?tab=db" class="text-decoration-none text-body">
+                    <i class="fas fa-database"></i> Database Information
+                </a>
+            </h5>
+            <small class="text-muted" id="{{ wid }}-timer">—</small>
+        </div>
+        <div class="card-body" id="{{ wid }}-body">
+            <p class="text-muted mb-0">Loading…</p>
+        </div>
+    </div>
+</div>
+{% elif kind == 'active' %}
+<div id="{{ wid }}" class="xray-db-widget xray-db-metric text-start">
+    <div class="card text-center">
+        <div class="card-body">
+            <h5 class="card-title mb-1">
+                <a href="admin/xray?tab=db" class="text-decoration-none text-body">Active Connections</a>
+            </h5>
+            <div id="{{ wid }}-value" class="xray-db-metric-value text-primary">—</div>
+            <small id="{{ wid }}-sub" class="text-muted">—</small>
+        </div>
+    </div>
+</div>
+{% elif kind == 'health' %}
+<div id="{{ wid }}" class="xray-db-widget xray-db-metric text-start">
+    <div class="card text-center">
+        <div class="card-body">
+            <h5 class="card-title mb-1">
+                <a href="admin/xray?tab=db" class="text-decoration-none text-body">Pool Health</a>
+            </h5>
+            <div id="{{ wid }}-value" class="xray-db-metric-value text-success">—</div>
+            <small id="{{ wid }}-sub" class="text-muted">—</small>
+        </div>
+    </div>
+</div>
+{% elif kind == 'overflow' %}
+<div id="{{ wid }}" class="xray-db-widget xray-db-metric text-start">
+    <div class="card text-center">
+        <div class="card-body">
+            <h5 class="card-title mb-1">
+                <a href="admin/xray?tab=db" class="text-decoration-none text-body">Overflow</a>
+            </h5>
+            <div id="{{ wid }}-value" class="xray-db-metric-value text-primary">—</div>
+            <small id="{{ wid }}-sub" class="text-muted">—</small>
+        </div>
+    </div>
+</div>
+{% elif kind == 'history' %}
+<div id="{{ wid }}" class="xray-db-widget text-start">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <a href="admin/xray?tab=db" class="text-decoration-none text-body">
+                    <i class="fas fa-chart-area"></i> Pool Usage History
+                </a>
+            </h5>
+        </div>
+        <div class="card-body d-flex flex-column p-2">
+            <div class="xray-db-chart-wrap">
+                <canvas id="{{ wid }}-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endif %}
+
+<script>
+(function () {
+    var KIND = {{ kind|tojson }};
+    var WID = {{ wid|tojson }};
+    var POLL_MS = 30000;
+    var chart = null;
+    var timer = null;
+
+    function setText(id, text) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = text;
+    }
+
+    function renderInfo(data) {
+        var body = document.getElementById(WID + '-body');
+        if (!body) return;
+        if (!data || data.error) {
+            body.innerHTML = '<p class="text-danger mb-0">' + ((data && data.error) || 'Error') + '</p>';
+            return;
+        }
+        function row(label, valueHtml) {
+            return '<tr><td class="text-muted" style="width:45%"><strong>' + label +
+                ':</strong></td><td>' + valueHtml + '</td></tr>';
+        }
+        var html = '<table class="table table-sm table-borderless mb-0">';
+        html += row('Type', '<span class="badge bg-primary">' + (data.type || '—') + '</span>');
+        html += row('Version', data.version || '—');
+        html += row('Database Name', '<code>' + (data.database_name || '—') + '</code>');
+        html += row('Database Size', '<strong>' + (data.database_size || '—') + '</strong>');
+        html += row('Tables Count', '<span class="badge bg-secondary">' + (data.tables_count || 0) + '</span>');
+        if (data.indexes_count && data.indexes_count > 0) {
+            html += row('Indexes', '<span class="badge bg-info">' + data.indexes_count + '</span>');
+        }
+        if (data.views_count && data.views_count > 0) {
+            html += row('Views', '<span class="badge bg-info">' + data.views_count + '</span>');
+        }
+        html += row('Connection', '<code class="small">' + (data.connection_string || '—') + '</code>');
+        if (data.max_connections != null && data.max_connections !== 'Unknown' && data.max_connections !== 'N/A') {
+            html += row('Max Connections', data.max_connections);
+        }
+        var active = (data.active_connections != null && data.active_connections !== 'Unknown' && data.active_connections !== 'N/A')
+            ? data.active_connections : 0;
+        var idle = (data.idle_connections != null && data.idle_connections !== 'Unknown' && data.idle_connections !== 'N/A')
+            ? data.idle_connections : 0;
+        html += row('Active', '<span class="badge bg-success">' + active + '</span>');
+        html += row('Idle', '<span class="badge bg-secondary">' + idle + '</span>');
+        if (data.connections_usage_percent && data.connections_usage_percent > 0) {
+            var pct = data.connections_usage_percent;
+            var cls = pct > 80 ? 'bg-danger' : (pct > 60 ? 'bg-warning' : 'bg-success');
+            html += row('Connections Usage', '<span class="badge ' + cls + '">' + pct + '%</span>');
+        }
+        if (data.server_uptime && data.server_uptime !== 'Unknown') {
+            html += row('Server Uptime', '<small>' + data.server_uptime + '</small>');
+        }
+        if (data.charset && data.charset !== 'Unknown') {
+            html += row('Charset', data.charset);
+        }
+        if (data.collation && data.collation !== 'Unknown') {
+            html += row('Collation', data.collation);
+        }
+        html += '</table>';
+        body.innerHTML = html;
+    }
+
+    function applyPoolStats(data) {
+        if (!data || data.error) return;
+        if (KIND === 'active') {
+            setText(WID + '-value', data.active_connections != null ? data.active_connections : '—');
+            setText(WID + '-sub', (data.pool_usage_percent != null ? data.pool_usage_percent : '—') +
+                '% of ' + (data.pool_size != null ? data.pool_size : '—'));
+        } else if (KIND === 'overflow') {
+            setText(WID + '-value', data.overflow != null ? data.overflow : '—');
+            setText(WID + '-sub', (data.overflow_usage_percent != null ? data.overflow_usage_percent : '—') + '%');
+        }
+    }
+
+    function applyHealth(data) {
+        if (!data || data.error) return;
+        var val = document.getElementById(WID + '-value');
+        if (!val) return;
+        val.textContent = data.health_score != null ? data.health_score : '—';
+        val.className = 'xray-db-metric-value ' +
+            (data.status === 'healthy' ? 'text-success' :
+                (data.status === 'warning' ? 'text-warning' : 'text-danger'));
+        setText(WID + '-sub', data.status || '—');
+    }
+
+    function ensureChart() {
+        if (chart) return chart;
+        var canvas = document.getElementById(WID + '-chart');
+        if (!canvas || typeof Chart === 'undefined') return null;
+        chart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Active Connections',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    yAxisID: 'y'
+                }, {
+                    label: 'Usage %',
+                    data: [],
+                    borderColor: 'rgb(255, 99, 132)',
+                    tension: 0.1,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    y: { type: 'linear', display: true, position: 'left', beginAtZero: true },
+                    y1: {
+                        type: 'linear', display: true, position: 'right', max: 100,
+                        grid: { drawOnChartArea: false }
+                    }
+                }
+            }
+        });
+        return chart;
+    }
+
+    function applyHistory(payload) {
+        var ch = ensureChart();
+        if (!ch) return;
+        var history = (payload && payload.history) || [];
+        ch.data.labels = history.map(function (h) {
+            return new Date(h.timestamp * 1000).toLocaleTimeString();
+        });
+        ch.data.datasets[0].data = history.map(function (h) { return h.active_connections; });
+        ch.data.datasets[1].data = history.map(function (h) { return h.usage_percent; });
+        ch.update('none');
+    }
+
+    function refresh() {
+        if (KIND === 'info') {
+            fetch('/api/xray/database/info')
+                .then(function (r) { return r.json(); })
+                .then(renderInfo)
+                .catch(function (err) {
+                    console.error('db info widget', err);
+                    renderInfo({ error: 'Error' });
+                });
+        } else if (KIND === 'active' || KIND === 'overflow') {
+            fetch('/api/xray/database/pool/stats')
+                .then(function (r) { return r.json(); })
+                .then(applyPoolStats)
+                .catch(function (err) { console.error('db pool widget', err); });
+        } else if (KIND === 'health') {
+            fetch('/api/xray/database/pool/health')
+                .then(function (r) { return r.json(); })
+                .then(applyHealth)
+                .catch(function (err) { console.error('db health widget', err); });
+        } else if (KIND === 'history') {
+            fetch('/api/xray/database/pool/history')
+                .then(function (r) { return r.json(); })
+                .then(applyHistory)
+                .catch(function (err) { console.error('db history widget', err); });
+        }
+        setText(WID + '-timer', new Date().toLocaleTimeString());
+    }
+
+    if (KIND === 'history' && typeof ResizeObserver !== 'undefined') {
+        var root = document.getElementById(WID);
+        var wrap = root && root.querySelector('.xray-db-chart-wrap');
+        if (wrap) {
+            new ResizeObserver(function () {
+                if (chart) chart.resize();
+            }).observe(wrap);
+        }
+    }
+
+    refresh();
+    timer = setInterval(refresh, POLL_MS);
+})();
+</script>

@@ -1,50 +1,138 @@
 {% extends "layouts/module_admin.html" %}
 {% block stylesheets %}
 <link rel="stylesheet" href="{{ config.ASSETS_ROOT }}/plugins/datatables/css/dataTables.bootstrap5.min.css">
+<style>
+#configTabs .nav-item[data-tab-id] {
+  cursor: grab;
+  touch-action: none;
+}
+#configTabs .nav-item[data-tab-id] > .nav-link {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+#configTabs .nav-item.xr-tab-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+#configTabs .nav-item.xr-tab-drag-over > .nav-link {
+  box-shadow: inset 0 -2px 0 var(--bs-primary);
+}
+#configTabs .xr-tab-reset {
+  cursor: pointer;
+  opacity: 0.55;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.55rem;
+  align-self: center;
+}
+#configTabs .xr-tab-reset:hover {
+  opacity: 1;
+}
+#configTabs.xr-tabs-pending {
+  visibility: hidden;
+}
+</style>
 {% endblock %}
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="xray">XRAY</a></li>
 {% endblock %}
 {% block module %}
+<script>
+/* /admin/xray without ?tab= → first tab from user's saved order */
+(function () {
+    try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.has('tab')) return;
+        var raw = localStorage.getItem('xray.tabs.order');
+        if (!raw) return;
+        var order = JSON.parse(raw);
+        if (!Array.isArray(order) || !order.length) return;
+        var first = order[0] === '' ? 'cycles' : order[0];
+        if (!first || first === 'cycles') return;
+        window.location.replace('?tab=' + encodeURIComponent(first));
+    } catch (e) {}
+})();
+</script>
 
-<ul class="nav nav-tabs" id="configTabs" role="tablist">
-  <li class="nav-item">
-      <a class="nav-link tab-button {% if tab == ''%}active{%endif%}" href="?tab=">Cycles</a>
+<ul class="nav nav-tabs flex-wrap xr-tabs-pending" id="configTabs" role="tablist">
+  <li class="nav-item" data-tab-id="cycles">
+      <a class="nav-link tab-button {% if tab == ''%}active{%endif%}" href="?tab=" draggable="false">Cycles</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'cache'%}active{%endif%}" href="?tab=cache">Cache</a>
+  <li class="nav-item" data-tab-id="cache">
+    <a class="nav-link tab-button {% if tab == 'cache'%}active{%endif%}" href="?tab=cache" draggable="false">Cache</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'objects'%}active{%endif%}" href="?tab=objects">Objects storage</a>
+  <li class="nav-item" data-tab-id="objects">
+    <a class="nav-link tab-button {% if tab == 'objects'%}active{%endif%}" href="?tab=objects" draggable="false">Objects storage</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'props'%}active{%endif%}" href="?tab=props">Properties</a>
+  <li class="nav-item" data-tab-id="props">
+    <a class="nav-link tab-button {% if tab == 'props'%}active{%endif%}" href="?tab=props" draggable="false">Properties</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'methods'%}active{%endif%}" href="?tab=methods">Methods</a>
+  <li class="nav-item" data-tab-id="methods">
+    <a class="nav-link tab-button {% if tab == 'methods'%}active{%endif%}" href="?tab=methods" draggable="false">Methods</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'notifications'%}active{%endif%}" href="?tab=notifications">Notifications</a>
+  <li class="nav-item" data-tab-id="notifications">
+    <a class="nav-link tab-button {% if tab == 'notifications'%}active{%endif%}" href="?tab=notifications" draggable="false">Notifications</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'db'%}active{%endif%}" href="?tab=db">Database</a>
+  <li class="nav-item" data-tab-id="db">
+    <a class="nav-link tab-button {% if tab == 'db'%}active{%endif%}" href="?tab=db" draggable="false">Database</a>
   </li>
-  <li class="nav-item">  
-    <a class="nav-link tab-button {% if tab == 'thread_pools'%}active{%endif%}" href="?tab=thread_pools">Thread Pools</a>  
+  <li class="nav-item" data-tab-id="thread_pools">
+    <a class="nav-link tab-button {% if tab == 'thread_pools'%}active{%endif%}" href="?tab=thread_pools" draggable="false">Thread Pools</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'threads'%}active{%endif%}" href="?tab=threads">Threads</a>
+  <li class="nav-item" data-tab-id="threads">
+    <a class="nav-link tab-button {% if tab == 'threads'%}active{%endif%}" href="?tab=threads" draggable="false">Threads</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'cleaner'%}active{%endif%}" href="?tab=cleaner">Cleaner</a>
+  <li class="nav-item" data-tab-id="cleaner">
+    <a class="nav-link tab-button {% if tab == 'cleaner'%}active{%endif%}" href="?tab=cleaner" draggable="false">Cleaner</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link tab-button {% if tab == 'system'%}active{%endif%}" href="?tab=system">System</a>
+  <li class="nav-item" data-tab-id="system">
+    <a class="nav-link tab-button {% if tab == 'system'%}active{%endif%}" href="?tab=system" draggable="false">System</a>
   </li>
-  <li class="nav-item">  
-    <a class="nav-link tab-button {% if tab == 'analytics'%}active{%endif%}" href="?tab=analytics">Analytics</a>  
+  <li class="nav-item" data-tab-id="resources">
+    <a class="nav-link tab-button {% if tab == 'resources'%}active{%endif%}" href="?tab=resources" draggable="false">{{ _('Resources') }}</a>
+  </li>
+  <li class="nav-item" data-tab-id="analytics">
+    <a class="nav-link tab-button {% if tab == 'analytics'%}active{%endif%}" href="?tab=analytics" draggable="false">Analytics</a>
+  </li>
+  <li class="nav-item ms-auto" id="xr-tab-reset-wrap">
+    <a href="#" class="nav-link xr-tab-reset" id="xr-tab-reset" title="{{ _('Reset tab order') }}" draggable="false">
+      <i class="fas fa-undo"></i>
+    </a>
   </li>
 </ul>
+<script>
+/* Apply saved tab order before first paint to avoid jump */
+(function () {
+    var STORAGE_KEY = 'xray.tabs.order';
+    var list = document.getElementById('configTabs');
+    if (!list) return;
+    var resetWrap = document.getElementById('xr-tab-reset-wrap');
+    try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            var order = JSON.parse(raw);
+            if (Array.isArray(order) && order.length) {
+                order = order.map(function (id) { return id === '' ? 'cycles' : id; });
+                var byId = {};
+                var items = list.querySelectorAll('.nav-item[data-tab-id]');
+                for (var i = 0; i < items.length; i++) {
+                    byId[items[i].getAttribute('data-tab-id')] = items[i];
+                }
+                for (var j = 0; j < order.length; j++) {
+                    var id = order[j];
+                    if (byId[id]) {
+                        list.insertBefore(byId[id], resetWrap);
+                        delete byId[id];
+                    }
+                }
+                Object.keys(byId).forEach(function (k) {
+                    list.insertBefore(byId[k], resetWrap);
+                });
+            }
+        }
+    } catch (e) {}
+    list.classList.remove('xr-tabs-pending');
+})();
+</script>
 <div class="tab-content mt-3" id="myTabContent">
   <div class="tab-pane fade show active">
   <script src="{{ config.ASSETS_ROOT }}/plugins/datatables/js/dataTables.min.js"></script>
@@ -52,4 +140,166 @@
   {% block tab %}{% endblock %}
   </div>
 </div>
+<script>
+(function () {
+    const STORAGE_KEY = 'xray.tabs.order';
+    const THRESHOLD = 6;
+    const list = document.getElementById('configTabs');
+    if (!list) return;
+
+    const resetWrap = document.getElementById('xr-tab-reset-wrap');
+    let dragEl = null;
+    let startX = 0;
+    let startY = 0;
+    let dragging = false;
+    let moved = false;
+    let pointerId = null;
+
+    function tabItems() {
+        return Array.prototype.slice.call(list.querySelectorAll('.nav-item[data-tab-id]'));
+    }
+
+    function currentOrder() {
+        return tabItems().map(function (el) { return el.getAttribute('data-tab-id'); });
+    }
+
+    function saveOrder() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentOrder()));
+        } catch (e) {}
+    }
+
+    function loadOrder() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            const order = JSON.parse(raw);
+            if (!Array.isArray(order)) return null;
+            // migrate old empty-id "cycles"
+            return order.map(function (id) { return id === '' ? 'cycles' : id; });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function applyOrder(order) {
+        if (!order || !order.length) return;
+        const byId = {};
+        tabItems().forEach(function (el) {
+            byId[el.getAttribute('data-tab-id')] = el;
+        });
+        order.forEach(function (id) {
+            if (byId[id]) {
+                list.insertBefore(byId[id], resetWrap);
+                delete byId[id];
+            }
+        });
+        Object.keys(byId).forEach(function (id) {
+            list.insertBefore(byId[id], resetWrap);
+        });
+    }
+
+    function clearDragOver() {
+        tabItems().forEach(function (el) { el.classList.remove('xr-tab-drag-over'); });
+    }
+
+    function placeBefore(target, clientX) {
+        if (!dragEl || !target || target === dragEl || !target.getAttribute('data-tab-id')) return;
+        clearDragOver();
+        target.classList.add('xr-tab-drag-over');
+        const rect = target.getBoundingClientRect();
+        const before = (clientX - rect.left) < rect.width / 2;
+        if (before) {
+            list.insertBefore(dragEl, target);
+        } else {
+            const next = target.nextElementSibling;
+            if (next === resetWrap || !next) {
+                list.insertBefore(dragEl, resetWrap);
+            } else {
+                list.insertBefore(dragEl, next);
+            }
+        }
+    }
+
+    function onPointerDown(e) {
+        if (e.button != null && e.button !== 0) return;
+        // ignore interactive controls inside reset button area
+        if (e.target && e.target.closest && e.target.closest('#xr-tab-reset-wrap')) return;
+        const item = e.currentTarget;
+        dragEl = item;
+        startX = e.clientX;
+        startY = e.clientY;
+        dragging = false;
+        moved = false;
+        pointerId = e.pointerId;
+        // do NOT capture yet — otherwise <a> click/navigation breaks
+    }
+
+    function onPointerMove(e) {
+        if (!dragEl || pointerId !== e.pointerId) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (!dragging) {
+            if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
+            dragging = true;
+            moved = true;
+            dragEl.classList.add('xr-tab-dragging');
+            try { dragEl.setPointerCapture(e.pointerId); } catch (err) {}
+        }
+        e.preventDefault();
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const target = el && el.closest ? el.closest('.nav-item[data-tab-id]') : null;
+        placeBefore(target, e.clientX);
+    }
+
+    function onPointerUp(e) {
+        if (!dragEl || (pointerId != null && e.pointerId !== pointerId)) return;
+        const item = dragEl;
+        const wasDragging = dragging;
+        if (wasDragging) {
+            try { item.releasePointerCapture(e.pointerId); } catch (err) {}
+            item.classList.remove('xr-tab-dragging');
+            clearDragOver();
+            saveOrder();
+            // suppress the click that follows a completed drag
+            const suppress = function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                list.removeEventListener('click', suppress, true);
+            };
+            list.addEventListener('click', suppress, true);
+            setTimeout(function () {
+                list.removeEventListener('click', suppress, true);
+            }, 50);
+        }
+        dragEl = null;
+        dragging = false;
+        moved = false;
+        pointerId = null;
+    }
+
+    function bindDnD() {
+        tabItems().forEach(function (el) {
+            el.addEventListener('pointerdown', onPointerDown);
+        });
+        // global move/up so drag continues if pointer leaves the tab
+        // before capture starts (after threshold)
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+        document.addEventListener('pointercancel', onPointerUp);
+    }
+
+    // order already applied by the early inline script
+    bindDnD();
+
+    const resetBtn = document.getElementById('xr-tab-reset');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            try { localStorage.removeItem(STORAGE_KEY); } catch (err) {}
+            window.location.reload();
+        });
+    }
+})();
+</script>
 {% endblock %}

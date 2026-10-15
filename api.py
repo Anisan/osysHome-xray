@@ -4,10 +4,38 @@ from app.api.decorators import api_key_required
 from app.authentication.handlers import handle_admin_required
 from plugins.xray import xray
 import time
+from app.core.lib.common import writeSystemStatsMetric, incrementSystemStatsMetric
+from app.core.lib.constants import PropertyType
 
 _api_ns = Namespace(name="Xray", description="XRay namespace", validate=True)
 
 _instance: xray = None
+_PLUGIN = "xray"
+
+
+def _record_api_call(metric_prefix: str, handler):
+    """Record API request count, errors and latency to SystemStats."""
+    incrementSystemStatsMetric(_PLUGIN, "api_requests_total", 1)
+    start = time.perf_counter()
+    try:
+        result = handler()
+        status = 200
+        if isinstance(result, tuple) and len(result) > 1:
+            status = result[1]
+        if status >= 400:
+            incrementSystemStatsMetric(_PLUGIN, "api_errors_total", 1)
+        return result
+    except Exception:
+        incrementSystemStatsMetric(_PLUGIN, "api_errors_total", 1)
+        raise
+    finally:
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        writeSystemStatsMetric(
+            _PLUGIN,
+            f"api_{metric_prefix}_latency_ms",
+            latency_ms,
+            prop_type=PropertyType.Float,
+        )
 
 
 def _collect_thread_pool_stats(pool_obj, pool_alias: str):
@@ -91,16 +119,34 @@ def create_api_ns(instance: xray):
     return _api_ns
 
 
+@_api_ns.route("/database/info")
+class database_info(Resource):
+    @api_key_required
+    @handle_admin_required
+    def get(self):
+        """Database Information card data (same as Database tab)."""
+        def _handler():
+            try:
+                return jsonify(_instance.get_db_info())
+            except Exception as exc:
+                return jsonify({"error": str(exc)}), 500
+
+        return _record_api_call("database_info", _handler)
+
+
 @_api_ns.route("/database/pool/stats")
 class pool_stats(Resource):
     @api_key_required
     @handle_admin_required
     def get(self):
         """Получить текущую статистику пула соединений"""
-        stats = _instance.get_pool_stats()
-        if stats:
-            return jsonify(stats.__dict__)
-        return jsonify({"error": "Pool monitoring not available"}), 503
+        def _handler():
+            stats = _instance.get_pool_stats()
+            if stats:
+                return jsonify(stats.__dict__)
+            return jsonify({"error": "Pool monitoring not available"}), 503
+
+        return _record_api_call("pool_stats", _handler)
 
 
 @_api_ns.route("/database/pool/history")
@@ -109,28 +155,31 @@ class pool_history(Resource):
     @handle_admin_required
     def get(self):
         """Получить историю статистики пула"""
-        minutes = request.args.get("minutes", 60, type=int)
-        history = _instance.get_pool_history(minutes)
+        def _handler():
+            minutes = request.args.get("minutes", 60, type=int)
+            history = _instance.get_pool_history(minutes)
 
-        return jsonify(
-            {
-                "history": [
-                    {
-                        "active_connections": stat.active_connections,
-                        "idle_connections": stat.idle_connections,
-                        "total_connections": stat.total_connections,
-                        "overflow": stat.overflow,
-                        "timestamp": stat.timestamp,
-                        "usage_percent": round(
-                            (stat.active_connections / stat.pool_size) * 100, 1
-                        ),
-                    }
-                    for stat in history
-                ],
-                "period_minutes": minutes,
-                "total_records": len(history),
-            }
-        )
+            return jsonify(
+                {
+                    "history": [
+                        {
+                            "active_connections": stat.active_connections,
+                            "idle_connections": stat.idle_connections,
+                            "total_connections": stat.total_connections,
+                            "overflow": stat.overflow,
+                            "timestamp": stat.timestamp,
+                            "usage_percent": round(
+                                (stat.active_connections / stat.pool_size) * 100, 1
+                            ),
+                        }
+                        for stat in history
+                    ],
+                    "period_minutes": minutes,
+                    "total_records": len(history),
+                }
+            )
+
+        return _record_api_call("pool_history", _handler)
 
 
 @_api_ns.route("/database/pool/health")
@@ -139,33 +188,72 @@ class pool_health(Resource):
     @handle_admin_required
     def get(self):
         """Получить показатели здоровья пула"""
-        stats = _instance.get_pool_stats()
-        if not stats:
-            return jsonify({"error": "Pool monitoring not available"}), 503
+        def _handler():
+            stats = _instance.get_pool_stats()
+            if not stats:
+                return jsonify({"error": "Pool monitoring not available"}), 503
 
-        health_score = 100
-        warnings = []
+            health_score = 100
+            warnings = []
 
-        # Проверки здоровья
-        if stats.pool_usage_percent > 90:
-            health_score -= 80
-            warnings.append("Critical pool usage")
-        elif stats.pool_usage_percent > 80:
-            health_score -= 50
-            warnings.append("High pool usage")
+            if stats.pool_usage_percent > 90:
+                health_score -= 80
+                warnings.append("Critical pool usage")
+            elif stats.pool_usage_percent > 80:
+                health_score -= 50
+                warnings.append("High pool usage")
 
-        recommendations = []
-        if stats.pool_usage_percent > 85:
-            recommendations.append("Consider increasing pool size")
+            recommendations = []
+            if stats.pool_usage_percent > 85:
+                recommendations.append("Consider increasing pool size")
 
-        return jsonify(
-            {
-                "health_score": max(health_score, 0),
-                'status': 'healthy' if health_score > 80 else 'warning' if health_score > 50 else 'critical',
-                "warnings": warnings,
-                "recommendations": recommendations,
-            }
-        )
+            health_score = max(health_score, 0)
+            writeSystemStatsMetric(_PLUGIN, "db_pool_health_score", health_score, prop_type=PropertyType.Integer)
+
+            return jsonify(
+                {
+                    "health_score": health_score,
+                    'status': 'healthy' if health_score > 80 else 'warning' if health_score > 50 else 'critical',
+                    "warnings": warnings,
+                    "recommendations": recommendations,
+                }
+            )
+
+        return _record_api_call("pool_health", _handler)
+
+@_api_ns.route("/resources/stats")
+class resources_stats(Resource):
+    @api_key_required
+    @handle_admin_required
+    def get(self):
+        """Current osysHome process resource snapshot for realtime UI."""
+        # flask-restx + custom JSON representation: возвращать dict / (dict, code), не jsonify()
+        stats = _instance.get_resource_stats()
+        if stats is None:
+            return {"available": False, "error": "Resource monitoring not available"}, 503
+        payload = stats.to_dict() if hasattr(stats, "to_dict") else dict(stats.__dict__)
+        return payload
+
+
+@_api_ns.route("/resources/history")
+class resources_history(Resource):
+    @api_key_required
+    @handle_admin_required
+    def get(self):
+        """In-memory resource history for realtime charts."""
+        minutes = request.args.get("minutes", 30, type=int)
+        history = _instance.get_resource_history(minutes)
+        monitor = getattr(_instance, "_resource_monitor", None)
+        return {
+            "history": [
+                (stat.to_dict() if hasattr(stat, "to_dict") else dict(stat.__dict__))
+                for stat in history
+            ],
+            "period_minutes": minutes,
+            "total_records": len(history),
+            "available": bool(monitor and monitor.available),
+        }
+
 
 @_api_ns.route("/analytics/stats")
 class analytics_stats(Resource):
@@ -173,15 +261,17 @@ class analytics_stats(Resource):
     @handle_admin_required
     def get(self):
         """Получить сырые данные для аналитики"""
-        from app.core.main.ObjectsStorage import objects_storage
+        def _handler():
+            from app.core.main.ObjectsStorage import objects_storage
 
-        stats = objects_storage.getAdvancedStats()
+            stats = objects_storage.getAdvancedStats()
 
-        # Возвращаем сырые данные без обработки
-        return jsonify({
-            "stats": stats,
-            "timestamp": time.time()
-        })
+            return jsonify({
+                "stats": stats,
+                "timestamp": time.time()
+            })
+
+        return _record_api_call("analytics", _handler)
 
 @_api_ns.route("/thread_pools/stats")
 class thread_pools_stats(Resource):
@@ -189,14 +279,24 @@ class thread_pools_stats(Resource):
     @handle_admin_required
     def get(self):
         """Получить статистику всех пулов потоков"""
-        from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
-        from app.core.lib.common import _poolSay, _poolPlaysound
-        data = {}
-        data.update(_collect_thread_pool_stats(_poolLinkedProperty, "linked_pool"))
-        data.update(_collect_thread_pool_stats(_poolSay, "say_pool"))
-        data.update(_collect_thread_pool_stats(_poolPlaysound, "playsound_pool"))
-        data["batch_writer"] = _batch_writer.get_stats()
-        return jsonify(data)
+        def _handler():
+            from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
+            from app.core.lib.common import _poolSay, _poolPlaysound
+            data = {}
+            data.update(_collect_thread_pool_stats(_poolLinkedProperty, "linked_pool"))
+            data.update(_collect_thread_pool_stats(_poolSay, "say_pool"))
+            data.update(_collect_thread_pool_stats(_poolPlaysound, "playsound_pool"))
+            data["batch_writer"] = _batch_writer.get_stats()
+            bw = data.get("batch_writer") or {}
+            writeSystemStatsMetric(
+                _PLUGIN,
+                "batch_writer_queue_size",
+                int(bw.get("queue_size") or 0),
+                prop_type=PropertyType.Integer,
+            )
+            return jsonify(data)
+
+        return _record_api_call("thread_pools", _handler)
 
 @_api_ns.route("/thread_pools/history")
 class thread_pools_history(Resource):
@@ -204,11 +304,14 @@ class thread_pools_history(Resource):
     @handle_admin_required
     def get(self):
         """Получить историю пулов потоков"""
-        from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
-        from app.core.lib.common import _poolSay, _poolPlaysound
-        data = {}
-        data.update(_collect_thread_pool_stats(_poolLinkedProperty, "linked_pool"))
-        data.update(_collect_thread_pool_stats(_poolSay, "say_pool"))
-        data.update(_collect_thread_pool_stats(_poolPlaysound, "playsound_pool"))
-        data["batch_writer"] = _batch_writer.get_stats()
-        return jsonify(data)
+        def _handler():
+            from app.core.main.ObjectManager import _poolLinkedProperty, _batch_writer
+            from app.core.lib.common import _poolSay, _poolPlaysound
+            data = {}
+            data.update(_collect_thread_pool_stats(_poolLinkedProperty, "linked_pool"))
+            data.update(_collect_thread_pool_stats(_poolSay, "say_pool"))
+            data.update(_collect_thread_pool_stats(_poolPlaysound, "playsound_pool"))
+            data["batch_writer"] = _batch_writer.get_stats()
+            return jsonify(data)
+
+        return _record_api_call("thread_pools_history", _handler)

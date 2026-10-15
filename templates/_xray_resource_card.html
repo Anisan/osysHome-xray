@@ -1,0 +1,234 @@
+{# Single Resources card. id_prefix keeps IDs unique in widgets. #}
+{% macro eid(id_prefix, name) -%}{{ id_prefix }}{{ name }}{%- endmacro %}
+
+{% macro resource_card(metric, id_prefix='') %}
+{% if metric == 'cpu' %}
+<div class="xr-card" data-card="cpu" data-mode="spark">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-microchip"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('CPU') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-value"><span id="{{ eid(id_prefix,'res-cpu') }}">—</span><span class="fs-6 fw-normal text-muted">%</span></div>
+            <div class="xr-sub">{{ _('process') }}</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-cpu') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-cpu') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'memory' %}
+<div class="xr-card" data-card="memory" data-mode="spark">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-memory"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Memory') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-value"><span id="{{ eid(id_prefix,'res-mem-pct-val') }}">—</span><span class="fs-6 fw-normal text-muted">%</span></div>
+            <div class="xr-sub" id="{{ eid(id_prefix,'res-rss') }}">—</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-memory') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-memory') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'disk' %}
+<div class="xr-card" data-card="disk" data-mode="value">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-hdd"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Disk') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-value"><span id="{{ eid(id_prefix,'res-disk-used-pct') }}">—</span><span class="fs-6 fw-normal text-muted">%</span></div>
+            <div class="xr-sub" id="{{ eid(id_prefix,'res-disk-used') }}">—</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-disk') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-disk') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'threads' %}
+<div class="xr-card" data-card="threads" data-mode="spark">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-stream"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Threads') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-value" id="{{ eid(id_prefix,'res-threads') }}">—</div>
+            <div class="xr-sub" id="{{ eid(id_prefix,'res-fds') }}">—</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-threads') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-threads') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'network' %}
+<div class="xr-card xr-keep-value" data-card="network" data-mode="history">
+    <div class="xr-card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+            <div>
+                <div class="xr-label mb-0">{{ _('Network throughput') }}</div>
+                <div class="xr-sub" id="{{ eid(id_prefix,'res-net-scope') }}">{{ _('NIC / netns') }}</div>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="xr-live xr-value-block">
+                    <span><span class="xr-dot xr-dot-primary"></span>{{ _('Download') }}: <strong id="{{ eid(id_prefix,'res-net-recv') }}">—</strong></span>
+                    <span><span class="xr-dot xr-dot-muted"></span>{{ _('Upload') }}: <strong id="{{ eid(id_prefix,'res-net-sent') }}">—</strong></span>
+                </div>
+                <div class="xr-modes" data-modes="value,history"></div>
+            </div>
+        </div>
+        <div class="xr-chart xr-chart-lg"><canvas id="{{ eid(id_prefix,'chart-network-io') }}"></canvas></div>
+        <div class="xr-footer-metrics">
+            <span>{{ _('Average') }}: <strong id="{{ eid(id_prefix,'res-net-avg') }}" class="text-body">—</strong></span>
+        </div>
+    </div>
+</div>
+{% elif metric == 'connections' %}
+<div class="xr-card xr-keep-value" data-card="connections" data-mode="history">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-label">{{ _('Connections') }}</div>
+            <div class="xr-modes" data-modes="value,history"></div>
+        </div>
+        <div class="xr-value-block">
+            <div class="xr-value" id="{{ eid(id_prefix,'res-net-conn') }}">—</div>
+            <div class="xr-sub" id="{{ eid(id_prefix,'res-net-states') }}">ESTABLISHED</div>
+            <div class="xr-live mt-2" style="font-size:0.78rem">
+                <span><span class="xr-dot xr-dot-primary"></span>EST <strong id="{{ eid(id_prefix,'res-net-est') }}">—</strong></span>
+                <span><span class="xr-dot" style="background:var(--bs-warning)"></span>CW <strong id="{{ eid(id_prefix,'res-net-cw') }}">—</strong></span>
+                <span><span class="xr-dot xr-dot-muted"></span>TW <strong id="{{ eid(id_prefix,'res-net-tw') }}">—</strong></span>
+            </div>
+        </div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'chart-connections') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'fds' %}
+<div class="xr-card xr-keep-value" data-card="fds" data-mode="spark">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-folder-open"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('File descriptors') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-fds-count') }}">—</div>
+            <div class="xr-sub" id="{{ eid(id_prefix,'res-fds-limit') }}">—</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-fds') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-fds') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'children' %}
+<div class="xr-card xr-keep-value" data-card="children" data-mode="spark">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-sitemap"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Children') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-children-count') }}">—</div>
+            <div class="xr-sub" id="{{ eid(id_prefix,'res-children-stats') }}">—</div>
+            <div id="{{ eid(id_prefix,'res-top-children') }}" class="xr-sub mt-1" style="max-height:4.5rem;overflow:auto">—</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-children') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-children') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'listen' %}
+<div class="xr-card xr-keep-value" data-card="listen" data-mode="value">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-ethernet"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Listen ports') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-listen-count') }}">—</div>
+            <div class="xr-sub" id="{{ eid(id_prefix,'res-listen-ports') }}" style="max-height:4.5rem;overflow:auto;word-break:break-all">—</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-listen') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-listen') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'remotes' %}
+<div class="xr-card xr-keep-value" data-card="remotes" data-mode="spark">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-project-diagram"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Top remotes') }}</div>
+        <div class="xr-value-block">
+            <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-remotes-total') }}">—</div>
+            <div id="{{ eid(id_prefix,'res-top-remotes') }}" class="xr-sub mt-1" style="max-height:4.5rem;overflow:auto">—</div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-remotes') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-remotes') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'uptime' %}
+<div class="xr-card" data-card="uptime" data-mode="value">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-clock"></i></div>
+        </div>
+        <div class="xr-label">{{ _('Uptime') }}</div>
+        <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-uptime') }}">—</div>
+        <div class="xr-sub" id="{{ eid(id_prefix,'res-pid') }}">—</div>
+    </div>
+</div>
+{% elif metric == 'process' %}
+<div class="xr-card xr-keep-value" data-card="process" data-mode="spark">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-server"></i></div>
+            <div class="xr-modes" data-modes="value,spark,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Process') }}</div>
+        <div class="xr-value-block">
+            <div class="d-flex gap-4 flex-wrap">
+                <div>
+                    <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-rss-big') }}">—</div>
+                    <div class="xr-sub">{{ _('RAM RSS') }}</div>
+                </div>
+                <div>
+                    <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-vms-big') }}">—</div>
+                    <div class="xr-sub">VMS</div>
+                </div>
+            </div>
+        </div>
+        <div class="xr-spark"><canvas id="{{ eid(id_prefix,'spark-process') }}"></canvas></div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'hist-process') }}"></canvas></div>
+    </div>
+</div>
+{% elif metric == 'diskio' %}
+<div class="xr-card xr-keep-value" data-card="diskio" data-mode="value">
+    <div class="xr-card-body">
+        <div class="xr-card-top">
+            <div class="xr-icon"><i class="fas fa-exchange-alt"></i></div>
+            <div class="xr-modes" data-modes="value,history"></div>
+        </div>
+        <div class="xr-label">{{ _('Disk I/O') }}</div>
+        <div class="xr-value-block">
+            <div class="d-flex gap-4 flex-wrap">
+                <div>
+                    <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-io-read-big') }}">—</div>
+                    <div class="xr-sub">{{ _('Read') }}</div>
+                </div>
+                <div>
+                    <div class="xr-stat-inline" id="{{ eid(id_prefix,'res-io-write-big') }}">—</div>
+                    <div class="xr-sub">{{ _('Write') }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="xr-chart"><canvas id="{{ eid(id_prefix,'chart-disk-io') }}"></canvas></div>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}

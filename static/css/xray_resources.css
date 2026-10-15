@@ -1,0 +1,246 @@
+.xray-res {
+    --xr-card-bg: var(--bs-body-bg);
+    --xr-muted: var(--bs-secondary-color);
+    --xr-border: var(--bs-border-color);
+    --xr-primary: var(--bs-primary);
+    --xr-primary-rgb: var(--bs-primary-rgb);
+    --xr-secondary-rgb: var(--bs-secondary-rgb);
+    --xr-emphasis: var(--bs-emphasis-color, var(--bs-body-color));
+}
+.xray-res .xr-card {
+    background: var(--xr-card-bg);
+    border: 1px solid var(--xr-border);
+    border-radius: 0.75rem;
+    box-shadow: 0 0.125rem 0.5rem rgba(var(--bs-body-color-rgb), 0.04);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.xray-res .xr-card-body {
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.xray-res .xr-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--xr-muted);
+    margin-bottom: 0;
+}
+.xray-res .xr-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--xr-emphasis);
+    font-variant-numeric: tabular-nums;
+}
+.xray-res .xr-sub {
+    font-size: 0.8rem;
+    color: var(--xr-muted);
+    margin-top: 0.25rem;
+}
+.xray-res .xr-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.45rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--xr-primary-rgb), 0.12);
+    color: var(--xr-primary);
+    font-size: 0.85rem;
+}
+.xray-res .xr-spark {
+    height: 40px;
+    margin-top: 0.65rem;
+    flex: 0 0 auto;
+}
+.xray-res .xr-spark canvas,
+.xray-res .xr-chart canvas {
+    width: 100% !important;
+}
+.xray-res .xr-chart {
+    position: relative;
+    height: 130px;
+    min-height: 130px;
+    margin-top: 0.5rem;
+    flex: 0 0 auto;
+}
+.xray-res .xr-chart-lg {
+    height: 170px;
+    min-height: 170px;
+}
+.xray-res .xr-live {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    color: var(--xr-muted);
+}
+.xray-res .xr-live strong {
+    color: var(--xr-emphasis);
+    font-weight: 600;
+}
+.xray-res .xr-dot {
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+}
+.xray-res .xr-dot-primary { background: var(--xr-primary); }
+.xray-res .xr-dot-muted { background: rgba(var(--xr-secondary-rgb), 0.85); }
+.xray-res .xr-footer-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--xr-border);
+    font-size: 0.8rem;
+    color: var(--xr-muted);
+    flex: 0 0 auto;
+}
+.xray-res .xr-stat-inline {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--xr-emphasis);
+    font-variant-numeric: tabular-nums;
+}
+.xray-res .xr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.xray-res .xr-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+.xray-res .xr-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.xray-res .xr-modes {
+    display: inline-flex;
+    border: 1px solid var(--xr-border);
+    border-radius: 0.45rem;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.xray-res .xr-modes button {
+    border: 0;
+    background: transparent;
+    color: var(--xr-muted);
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+.xray-res .xr-modes button + button {
+    border-left: 1px solid var(--xr-border);
+}
+.xray-res .xr-modes button.active {
+    background: rgba(var(--xr-primary-rgb), 0.16);
+    color: var(--xr-primary);
+}
+.xray-res .xr-modes button:hover:not(.active) {
+    background: rgba(var(--bs-body-color-rgb), 0.04);
+    color: var(--xr-emphasis);
+}
+.xray-res .xr-preset .btn {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.75rem;
+}
+.xray-res [data-card][data-mode="value"] .xr-spark,
+.xray-res [data-card][data-mode="value"] .xr-chart {
+    display: none !important;
+}
+.xray-res [data-card][data-mode="spark"] .xr-chart {
+    display: none !important;
+}
+.xray-res [data-card][data-mode="history"] .xr-spark {
+    display: none !important;
+}
+.xray-res [data-card][data-mode="history"] .xr-value-block {
+    display: none;
+}
+.xray-res [data-card][data-mode="history"].xr-keep-value .xr-value-block {
+    display: block;
+}
+
+/*
+ * Widget: same .xr-card chrome as Resources, but fills the grid cell.
+ * Outer dashboard .widget-card is neutralized; chart area grows.
+ */
+.widget-card:has(> .xray-res),
+.widget-card:has(.xray-res) {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: hidden;
+}
+.grid-stack-item-content:has(.xray-res) {
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.xray-res.xray-res-widget {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+}
+.xray-res.xray-res-widget .xr-card {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.xray-res.xray-res-widget .xr-card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+/* History / network chart fills leftover height */
+.xray-res.xray-res-widget [data-card][data-mode="history"] .xr-chart,
+.xray-res.xray-res-widget [data-card][data-mode="history"] .xr-chart-lg,
+.xray-res.xray-res-widget [data-card="network"] .xr-chart,
+.xray-res.xray-res-widget [data-card="network"] .xr-chart-lg,
+.xray-res.xray-res-widget [data-card="connections"] .xr-chart,
+.xray-res.xray-res-widget [data-card="diskio"] .xr-chart {
+    flex: 1 1 auto;
+    height: auto !important;
+    min-height: 72px;
+}
+.xray-res.xray-res-widget .xr-chart canvas,
+.xray-res.xray-res-widget .xr-chart-lg canvas {
+    position: absolute !important;
+    inset: 0;
+    height: 100% !important;
+}
+/* Spark mode: sparkline also stretches in tall cells */
+.xray-res.xray-res-widget [data-card][data-mode="spark"] .xr-spark {
+    flex: 1 1 auto;
+    height: auto !important;
+    min-height: 40px;
+    position: relative;
+}
+.xray-res.xray-res-widget [data-card][data-mode="spark"] .xr-spark canvas {
+    position: absolute !important;
+    inset: 0;
+    height: 100% !important;
+}

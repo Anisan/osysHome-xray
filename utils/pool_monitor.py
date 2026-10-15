@@ -18,9 +18,10 @@ class PoolStats:
 
 
 class DatabasePoolMonitor:
-    def __init__(self, engine, logger):
+    def __init__(self, engine, logger, plugin_name: str = ""):
         self.engine = engine
         self.logger = logger
+        self.plugin_name = plugin_name
         self.stats_history: List[PoolStats] = []
         self.max_history = 1000
         self._lock = threading.Lock()
@@ -34,7 +35,7 @@ class DatabasePoolMonitor:
         active = pool.checkedout()
         idle = pool.checkedin()
         total = pool.size()
-        overflow = pool.overflow()
+        overflow = max(pool.overflow(), 0)
 
         return PoolStats(
             active_connections=active,
@@ -42,7 +43,7 @@ class DatabasePoolMonitor:
             total_connections=total,
             pool_size=pool.size(),
             max_overflow=getattr(pool, "_max_overflow", 0),
-            overflow=pool.overflow(),
+            overflow=overflow,
             timestamp=time.time(),
             # Производительность
             pool_usage_percent=round((active / pool.size()) * 100, 2) if pool.size() > 0 else 0,
@@ -65,18 +66,48 @@ class DatabasePoolMonitor:
             f"overflow={stats.overflow}"
         )
 
+        self._publish_system_stats(stats)
+
         # Предупреждения о высокой нагрузке
-        usage_percent = (stats.active_connections / stats.pool_size) * 100
-        if usage_percent > 80:
-            self.logger.warning(
-                f"High pool usage: {stats.active_connections}/{stats.pool_size} "
-                f"({usage_percent:.1f}%)"
-            )
-        elif usage_percent > 90:
+        usage_percent = stats.pool_usage_percent
+        if usage_percent > 90:
             self.logger.error(
                 f"Critical pool usage: {stats.active_connections}/{stats.pool_size} "
                 f"({usage_percent:.1f}%)"
             )
+            self._increment_system_stats("db_pool_critical_usage_total", 1)
+        elif usage_percent > 80:
+            self.logger.warning(
+                f"High pool usage: {stats.active_connections}/{stats.pool_size} "
+                f"({usage_percent:.1f}%)"
+            )
+            self._increment_system_stats("db_pool_high_usage_warnings_total", 1)
+
+    def _publish_system_stats(self, stats: PoolStats) -> None:
+        if not self.plugin_name:
+            return
+        try:
+            from app.core.lib.common import writeSystemStatsMetric
+            from app.core.lib.constants import PropertyType
+
+            plugin = self.plugin_name
+            writeSystemStatsMetric(plugin, "db_pool_active_connections", stats.active_connections, prop_type=PropertyType.Integer)
+            writeSystemStatsMetric(plugin, "db_pool_idle_connections", stats.idle_connections, prop_type=PropertyType.Integer)
+            writeSystemStatsMetric(plugin, "db_pool_total_connections", stats.total_connections, prop_type=PropertyType.Integer)
+            writeSystemStatsMetric(plugin, "db_pool_overflow", stats.overflow, prop_type=PropertyType.Integer)
+            writeSystemStatsMetric(plugin, "db_pool_usage_percent", stats.pool_usage_percent, prop_type=PropertyType.Float)
+            writeSystemStatsMetric(plugin, "db_pool_overflow_usage_percent", stats.overflow_usage_percent, prop_type=PropertyType.Float)
+        except Exception as ex:
+            self.logger.debug("SystemStats pool publish failed: %s", ex)
+
+    def _increment_system_stats(self, metric_name: str, step: int = 1) -> None:
+        if not self.plugin_name:
+            return
+        try:
+            from app.core.lib.common import incrementSystemStatsMetric
+            incrementSystemStatsMetric(self.plugin_name, metric_name, step)
+        except Exception as ex:
+            self.logger.debug("SystemStats increment failed: %s", ex)
 
     def get_stats_history(self, minutes: int = 60) -> List[PoolStats]:
         """Получить историю статистики за последние N минут"""
@@ -99,13 +130,28 @@ class DatabasePoolMonitor:
                     time.sleep(interval)
                 except Exception as e:
                     self.logger.error(f"Pool monitoring error: {e}")
+                    self._increment_system_stats("monitoring_errors_total", 1)
                     time.sleep(interval)
 
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
         self.logger.info(f"Pool monitoring started with {interval}s interval")
+        self._write_system_stats_gauge("monitoring_active", 1)
+        self._write_system_stats_gauge("monitoring_interval_sec", interval)
 
     def stop_monitoring(self):
         """Остановка мониторинга"""
         self._monitoring = False
         self.logger.info("Pool monitoring stopped")
+        self._write_system_stats_gauge("monitoring_active", 0)
+
+    def _write_system_stats_gauge(self, metric_name: str, value) -> None:
+        if not self.plugin_name:
+            return
+        try:
+            from app.core.lib.common import writeSystemStatsMetric
+            from app.core.lib.constants import PropertyType
+            prop_type = PropertyType.Integer if isinstance(value, int) and not isinstance(value, bool) else PropertyType.Float
+            writeSystemStatsMetric(self.plugin_name, metric_name, value, prop_type=prop_type)
+        except Exception as ex:
+            self.logger.debug("SystemStats gauge publish failed: %s", ex)
