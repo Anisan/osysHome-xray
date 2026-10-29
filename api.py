@@ -315,3 +315,52 @@ class thread_pools_history(Resource):
             return jsonify(data)
 
         return _record_api_call("thread_pools_history", _handler)
+
+
+@_api_ns.route("/config")
+class config_editor(Resource):
+    @api_key_required
+    @handle_admin_required
+    def get(self):
+        """Текущий config.yaml + динамическая схема формы."""
+        def _handler():
+            from plugins.xray.utils import config_editor as cfg_ed
+            try:
+                return jsonify(cfg_ed.get_editor_payload())
+            except FileNotFoundError as exc:
+                return jsonify({"error": str(exc)}), 404
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
+        return _record_api_call("config_get", _handler)
+
+    @api_key_required
+    @handle_admin_required
+    def put(self):
+        """Сохранить config.yaml (text или form)."""
+        def _handler():
+            from plugins.xray.utils import config_editor as cfg_ed
+            body = request.get_json(silent=True) or {}
+            mode = (body.get("mode") or "text").strip().lower()
+            try:
+                if mode == "text":
+                    text = body.get("text")
+                    if text is None or not isinstance(text, str):
+                        return jsonify({"error": "Field 'text' is required for text mode"}), 400
+                    payload = cfg_ed.apply_text(text)
+                elif mode == "form":
+                    values = body.get("values")
+                    if not isinstance(values, dict):
+                        return jsonify({"error": "Field 'values' must be an object"}), 400
+                    payload = cfg_ed.apply_form_values(values)
+                else:
+                    return jsonify({"error": f"Unknown mode: {mode}"}), 400
+                return jsonify({"ok": True, **payload})
+            except FileNotFoundError as exc:
+                return jsonify({"error": str(exc)}), 404
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            except OSError as exc:
+                return jsonify({"error": f"Failed to write config: {exc}"}), 500
+
+        return _record_api_call("config_put", _handler)

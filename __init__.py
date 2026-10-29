@@ -34,7 +34,7 @@ class xray(BasePlugin):
     def __init__(self, app):
         super().__init__(app, __name__)
         self.title = "XRAY"
-        self.version = '1.14'
+        self.version = '1.23'
         self.description = """Xray view system"""
         self.category = "System"
         self.author = "Eraser"
@@ -365,6 +365,11 @@ class xray(BasePlugin):
                 "tab": tab,
             }
             return render_template("xray_analytics.html", **content)
+        elif tab == "config":
+            content = {
+                "tab": tab,
+            }
+            return render_template("xray_config.html", **content)
         else:
             values = {}
             for name,plugin in plugins.items():
@@ -388,14 +393,16 @@ class xray(BasePlugin):
             return 'Not install'
 
     def get_installed_packages(self):
+        """Список установленных пакетов через importlib.metadata (без subprocess/pip)."""
         try:
             packages = []
-            result = subprocess.run([sys.executable, '-m', 'pip', 'list', '--format=freeze'], capture_output=True, text=True)
-            packages = []
-            for line in result.stdout.split('\n'):
-                if line.strip():
-                    name, version = line.split('==') if '==' in line else (line.strip(), '?')
-                    packages.append({'name': name, 'version': version})
+            for dist in metadata.distributions():
+                # Name в METADATA надёжнее; fallback на dist.name (3.10+)
+                name = dist.metadata.get("Name") or getattr(dist, "name", None)
+                if not name:
+                    continue
+                packages.append({"name": name, "version": dist.version or "?"})
+            packages.sort(key=lambda p: p["name"].lower())
             return packages
         except Exception as e:
             self.logger.exception(e)
@@ -753,6 +760,54 @@ class xray(BasePlugin):
                 except Exception:
                     db_info['server_uptime'] = 'Unknown'
 
+                # Режим работы PostgreSQL: конфиг приложения + ключевые pg_settings
+                try:
+                    from app.configuration import Config
+
+                    pg_names = [
+                        'synchronous_commit',
+                        'fsync',
+                        'wal_level',
+                        'max_wal_size',
+                        'wal_buffers',
+                        'checkpoint_timeout',
+                        'checkpoint_completion_target',
+                        'shared_buffers',
+                        'effective_cache_size',
+                        'work_mem',
+                        'maintenance_work_mem',
+                        'random_page_cost',
+                        'default_transaction_isolation',
+                        'timezone',
+                        'server_encoding',
+                    ]
+                    in_list = ', '.join(f"'{n}'" for n in pg_names)
+                    rows = db.session.execute(
+                        text(
+                            f"SELECT name, setting, unit FROM pg_settings WHERE name IN ({in_list})"
+                        )
+                    ).fetchall()
+                    by_name = {r.name: r for r in rows}
+                    settings = {}
+                    for name in pg_names:
+                        row = by_name.get(name)
+                        if not row:
+                            settings[name] = 'Unknown'
+                            continue
+                        val = row.setting
+                        if row.unit:
+                            val = f"{val} {row.unit}"
+                        settings[name] = val
+
+                    db_info['postgresql'] = {
+                        'pool_size': getattr(Config, 'SQLALCHEMY_POOL_SIZE', None),
+                        'sqlalchemy_echo': getattr(Config, 'SQLALCHEMY_ECHO', False),
+                        'settings': settings,
+                    }
+                except Exception as e:
+                    self.logger.warning("Failed to get PostgreSQL mode info: %s", e)
+                    db_info['postgresql'] = None
+
             elif dialect == 'mysql':
                 # Получаем версию MySQL
                 try:
@@ -816,6 +871,85 @@ class xray(BasePlugin):
                 except Exception as e:
                     self.logger.warning("Failed to get tables count: %s", e)
 
+                try:
+                    indexes_query = text("""
+                        SELECT COUNT(*) FROM information_schema.statistics
+                        WHERE table_schema = DATABASE()
+                    """)
+                    db_info['indexes_count'] = db.session.execute(indexes_query).scalar() or 0
+                except Exception:
+                    db_info['indexes_count'] = 0
+                try:
+                    views_query = text("""
+                        SELECT COUNT(*) FROM information_schema.views
+                        WHERE table_schema = DATABASE()
+                    """)
+                    db_info['views_count'] = db.session.execute(views_query).scalar() or 0
+                except Exception:
+                    db_info['views_count'] = 0
+
+                # Режим работы MySQL/MariaDB: конфиг приложения + ключевые VARIABLES
+                try:
+                    from app.configuration import Config
+
+                    def _mysql_var(name):
+                        try:
+                            return db.session.execute(text(f"SELECT @@{name}")).scalar()
+                        except Exception:
+                            return None
+
+                    def _fmt_bytes(value):
+                        if value is None:
+                            return 'Unknown'
+                        try:
+                            return format_size(int(value))
+                        except (TypeError, ValueError):
+                            return str(value)
+
+                    # transaction_isolation: MySQL 5.7.20+ / 8.0; tx_isolation — старый alias
+                    isolation = _mysql_var('transaction_isolation')
+                    if isolation is None:
+                        isolation = _mysql_var('tx_isolation')
+
+                    settings = {
+                        'innodb_flush_log_at_trx_commit': _mysql_var('innodb_flush_log_at_trx_commit'),
+                        'sync_binlog': _mysql_var('sync_binlog'),
+                        'innodb_buffer_pool_size': _fmt_bytes(_mysql_var('innodb_buffer_pool_size')),
+                        'innodb_log_file_size': _fmt_bytes(_mysql_var('innodb_log_file_size')),
+                        'innodb_flush_method': _mysql_var('innodb_flush_method') or 'Unknown',
+                        'transaction_isolation': isolation or 'Unknown',
+                        'max_allowed_packet': _fmt_bytes(_mysql_var('max_allowed_packet')),
+                        'table_open_cache': _mysql_var('table_open_cache'),
+                        'character_set_server': _mysql_var('character_set_server') or 'Unknown',
+                        'collation_server': _mysql_var('collation_server') or 'Unknown',
+                        'sql_mode': _mysql_var('sql_mode') or 'Unknown',
+                        'version_comment': _mysql_var('version_comment') or 'Unknown',
+                    }
+                    # Нормализация None → Unknown
+                    for key, val in list(settings.items()):
+                        if val is None:
+                            settings[key] = 'Unknown'
+
+                    try:
+                        uptime_sec = _mysql_var('uptime')
+                        if uptime_sec is not None:
+                            sec = int(uptime_sec)
+                            days, rem = divmod(sec, 86400)
+                            hours, rem = divmod(rem, 3600)
+                            mins, secs = divmod(rem, 60)
+                            db_info['server_uptime'] = f"{days} days, {hours:02d}:{mins:02d}:{secs:02d}"
+                    except Exception:
+                        pass
+
+                    db_info['mysql'] = {
+                        'pool_size': getattr(Config, 'SQLALCHEMY_POOL_SIZE', None),
+                        'sqlalchemy_echo': getattr(Config, 'SQLALCHEMY_ECHO', False),
+                        'settings': settings,
+                    }
+                except Exception as e:
+                    self.logger.warning("Failed to get MySQL mode info: %s", e)
+                    db_info['mysql'] = None
+
             elif dialect == 'sqlite':
                 # Версия SQLite
                 try:
@@ -826,6 +960,7 @@ class xray(BasePlugin):
                     self.logger.warning("Failed to get SQLite version: %s", e)
                 
                 # Путь к базе данных
+                db_path = ''
                 try:
                     db_path = str(engine.url).replace('sqlite:///', '')
                     db_name = db_path.split('/')[-1] if '/' in db_path else db_path.split('\\')[-1]
@@ -835,8 +970,7 @@ class xray(BasePlugin):
                 
                 # Получаем размер файла БД
                 try:
-                    db_path = str(engine.url).replace('sqlite:///', '')
-                    if os.path.exists(db_path):
+                    if db_path and os.path.exists(db_path):
                         size_bytes = os.path.getsize(db_path)
                         db_info['database_size'] = format_size(size_bytes)
                     else:
@@ -851,11 +985,134 @@ class xray(BasePlugin):
                     db_info['tables_count'] = tables_count if tables_count is not None else 0
                 except Exception as e:
                     self.logger.warning("Failed to get tables count: %s", e)
+
+                # Индексы и представления
+                try:
+                    indexes_query = text("SELECT COUNT(*) FROM sqlite_master WHERE type='index';")
+                    db_info['indexes_count'] = db.session.execute(indexes_query).scalar() or 0
+                except Exception:
+                    db_info['indexes_count'] = 0
+                try:
+                    views_query = text("SELECT COUNT(*) FROM sqlite_master WHERE type='view';")
+                    db_info['views_count'] = db.session.execute(views_query).scalar() or 0
+                except Exception:
+                    db_info['views_count'] = 0
                 
                 # SQLite не имеет понятия max_connections в том же смысле
                 db_info['max_connections'] = 'N/A'
                 db_info['active_connections'] = 'N/A'
                 db_info['idle_connections'] = 'N/A'
+
+                # Режим работы SQLite: конфиг (database.sqlite.*) + фактические PRAGMA
+                try:
+                    from app.configuration import Config
+
+                    def _cfg_label(value):
+                        if value is None or (isinstance(value, str) and value.strip() == ''):
+                            return 'не задан (default)'
+                        return value
+
+                    def _pragma(name):
+                        try:
+                            return db.session.execute(text(f"PRAGMA {name}")).scalar()
+                        except Exception:
+                            return None
+
+                    def _sync_label(value):
+                        mapping = {0: 'OFF', 1: 'NORMAL', 2: 'FULL', 3: 'EXTRA'}
+                        if value is None:
+                            return 'Unknown'
+                        if isinstance(value, int) or (isinstance(value, str) and str(value).isdigit()):
+                            return mapping.get(int(value), str(value))
+                        return str(value).upper()
+
+                    def _temp_label(value):
+                        mapping = {0: 'DEFAULT', 1: 'FILE', 2: 'MEMORY'}
+                        if value is None:
+                            return 'Unknown'
+                        if isinstance(value, int) or (isinstance(value, str) and str(value).isdigit()):
+                            return mapping.get(int(value), str(value))
+                        return str(value).upper()
+
+                    def _cache_label(value):
+                        if value is None:
+                            return 'Unknown'
+                        try:
+                            n = int(value)
+                        except (TypeError, ValueError):
+                            return str(value)
+                        if n < 0:
+                            return f"{n} ({abs(n)} KiB)"
+                        return f"{n} pages"
+
+                    def _mmap_label(value):
+                        if value is None:
+                            return 'Unknown'
+                        try:
+                            return format_size(int(value))
+                        except (TypeError, ValueError):
+                            return str(value)
+
+                    journal_eff = _pragma('journal_mode')
+                    sync_eff = _pragma('synchronous')
+                    temp_eff = _pragma('temp_store')
+                    cache_eff = _pragma('cache_size')
+                    mmap_eff = _pragma('mmap_size')
+                    wal_auto_eff = _pragma('wal_autocheckpoint')
+                    page_size = _pragma('page_size')
+                    locking_mode = _pragma('locking_mode')
+                    busy_timeout = _pragma('busy_timeout')
+                    freelist = _pragma('freelist_count')
+                    auto_vacuum = _pragma('auto_vacuum')
+                    auto_vacuum_map = {0: 'NONE', 1: 'FULL', 2: 'INCREMENTAL'}
+
+                    wal_size = None
+                    shm_size = None
+                    if db_path and os.path.exists(db_path):
+                        wal_path = db_path + '-wal'
+                        shm_path = db_path + '-shm'
+                        if os.path.exists(wal_path):
+                            wal_size = format_size(os.path.getsize(wal_path))
+                        if os.path.exists(shm_path):
+                            shm_size = format_size(os.path.getsize(shm_path))
+
+                    db_info['sqlite'] = {
+                        'journal_mode': {
+                            'config': _cfg_label(getattr(Config, 'SQLITE_JOURNAL_MODE', 'WAL')),
+                            'effective': str(journal_eff).upper() if journal_eff is not None else 'Unknown',
+                        },
+                        'synchronous': {
+                            'config': _cfg_label(getattr(Config, 'SQLITE_SYNCHRONOUS', None)),
+                            'effective': _sync_label(sync_eff),
+                        },
+                        'temp_store': {
+                            'config': _cfg_label(getattr(Config, 'SQLITE_TEMP_STORE', None)),
+                            'effective': _temp_label(temp_eff),
+                        },
+                        'cache_size': {
+                            'config': _cfg_label(getattr(Config, 'SQLITE_CACHE_SIZE', None)),
+                            'effective': _cache_label(cache_eff),
+                        },
+                        'mmap_size': {
+                            'config': _cfg_label(getattr(Config, 'SQLITE_MMAP_SIZE', None)),
+                            'effective': _mmap_label(mmap_eff),
+                        },
+                        'wal_autocheckpoint': {
+                            'config': _cfg_label(getattr(Config, 'SQLITE_WAL_AUTOCHECKPOINT', None)),
+                            'effective': wal_auto_eff if wal_auto_eff is not None else 'Unknown',
+                        },
+                        'page_size': page_size if page_size is not None else 'Unknown',
+                        'locking_mode': str(locking_mode).upper() if locking_mode is not None else 'Unknown',
+                        'busy_timeout_ms': busy_timeout if busy_timeout is not None else 'Unknown',
+                        'freelist_count': freelist if freelist is not None else 'Unknown',
+                        'auto_vacuum': auto_vacuum_map.get(auto_vacuum, auto_vacuum) if auto_vacuum is not None else 'Unknown',
+                        'wal_file_size': wal_size,
+                        'shm_file_size': shm_size,
+                        'pool_size': getattr(Config, 'SQLALCHEMY_POOL_SIZE', None),
+                    }
+                except Exception as e:
+                    self.logger.warning("Failed to get SQLite mode info: %s", e)
+                    db_info['sqlite'] = None
 
         except Exception as e:
             self.logger.exception("Error getting database info: %s", e)

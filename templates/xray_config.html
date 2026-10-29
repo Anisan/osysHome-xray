@@ -1,0 +1,53 @@
+{% extends "xray_main.html" %}
+{% from "macros/code_editor.html" import render_editor %}
+
+{% block tab %}
+<div class="container-fluid px-0" id="xray-config-root">
+  <div class="alert alert-warning mb-3" id="xray-config-warning" role="alert">
+    {{ _('Changes are written to config.yaml only. Restart osysHome for most settings to take effect.') }}
+  </div>
+
+  <div id="xray-config-status" class="alert d-none mb-3" role="alert"></div>
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <ul class="nav nav-pills" id="xray-config-mode" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" type="button" data-mode="form" id="xray-config-mode-form">
+          {{ _('Form editor') }}
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" type="button" data-mode="text" id="xray-config-mode-text">
+          {{ _('Text editor') }}
+        </button>
+      </li>
+    </ul>
+    <div class="d-flex align-items-center gap-2">
+      <small class="text-muted text-break" id="xray-config-path"></small>
+      <button type="button" class="btn btn-primary" id="xray-config-save">{{ _('Save') }}</button>
+      <button type="button" class="btn btn-outline-secondary" id="xray-config-refresh">{{ _('Reload from file') }}</button>
+      {% if can_restart_system %}
+      <button type="button" class="btn btn-outline-danger" id="xray-config-restart"
+              onclick="if(confirm('{{ _('Are you sure you want to restart the system?') }}')) restart_system()">
+        {{ _('Restart') }}
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div id="xray-config-form-pane">
+    <ul class="nav nav-tabs flex-wrap mb-3" id="xray-config-sections" role="tablist"></ul>
+    <div id="xray-config-form-fields"></div>
+  </div>
+
+  <div id="xray-config-text-pane" class="d-none">
+    <label class="form-label">config.yaml</label>
+    {# Ace в проекте без mode-yaml — для Ace используем json (подсветка частичная). Monaco — yaml. #}
+    {% set code_engine = getProperty("SystemVar.code_editor") %}
+    {% set config_yaml_field = {'name': 'config_yaml', 'data': ''} %}
+    {{ render_editor(config_yaml_field, 'yaml' if code_engine == 'monaco' else 'json', module_name='xray') }}
+  </div>
+</div>
+
+<script src="{{ url_for('xray.static', filename='js/xray_config.js') }}"></script>
+{% endblock %}

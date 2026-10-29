@@ -3,7 +3,7 @@
 {% block tab %}
 <script src="{{ url_for('xray.static', filename='js/file-size.js') }}"></script>
 <div class="container-fluid">  
-    <div class="row">
+    <div class="row align-items-stretch">
         <!-- Левая колонка: Database Information -->
         <div class="col-md-4 d-flex">
             <div class="card flex-fill d-flex flex-column">
@@ -103,14 +103,172 @@
                         </tr>
                         {% endif %}
                     </table>
+
+                    {% if db_info.sqlite %}
+                    <hr class="my-3">
+                    <h6 class="text-muted mb-2"><i class="fas fa-cog"></i> SQLite Mode <small class="fw-normal">(database.sqlite)</small></h6>
+                    <table class="table table-sm table-borderless mb-0">
+                        <thead>
+                            <tr class="text-muted small">
+                                <th style="width: 40%;"></th>
+                                <th>Config</th>
+                                <th>Effective</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-muted"><strong>journal_mode</strong></td>
+                                <td><code class="small">{{ db_info.sqlite.journal_mode.config }}</code></td>
+                                <td>
+                                    <span class="badge {% if db_info.sqlite.journal_mode.effective == 'WAL' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                                        {{ db_info.sqlite.journal_mode.effective }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted"><strong>synchronous</strong></td>
+                                <td><code class="small">{{ db_info.sqlite.synchronous.config }}</code></td>
+                                <td><code class="small">{{ db_info.sqlite.synchronous.effective }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted"><strong>temp_store</strong></td>
+                                <td><code class="small">{{ db_info.sqlite.temp_store.config }}</code></td>
+                                <td><code class="small">{{ db_info.sqlite.temp_store.effective }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted"><strong>cache_size</strong></td>
+                                <td><code class="small">{{ db_info.sqlite.cache_size.config }}</code></td>
+                                <td><code class="small">{{ db_info.sqlite.cache_size.effective }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted"><strong>mmap_size</strong></td>
+                                <td><code class="small">{{ db_info.sqlite.mmap_size.config }}</code></td>
+                                <td><code class="small">{{ db_info.sqlite.mmap_size.effective }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted"><strong>wal_autocheckpoint</strong></td>
+                                <td><code class="small">{{ db_info.sqlite.wal_autocheckpoint.config }}</code></td>
+                                <td><code class="small">{{ db_info.sqlite.wal_autocheckpoint.effective }}</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <table class="table table-sm table-borderless mb-0 mt-2">
+                        <tr>
+                            <td class="text-muted" style="width: 45%;"><strong>page_size:</strong></td>
+                            <td>{{ db_info.sqlite.page_size }}{% if db_info.sqlite.page_size != 'Unknown' %} B{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>locking_mode:</strong></td>
+                            <td><code class="small">{{ db_info.sqlite.locking_mode }}</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>busy_timeout:</strong></td>
+                            <td>{% if db_info.sqlite.busy_timeout_ms != 'Unknown' %}{{ db_info.sqlite.busy_timeout_ms }} ms{% else %}Unknown{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>auto_vacuum:</strong></td>
+                            <td><code class="small">{{ db_info.sqlite.auto_vacuum }}</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>freelist_count:</strong></td>
+                            <td>{{ db_info.sqlite.freelist_count }}</td>
+                        </tr>
+                        {% if db_info.sqlite.wal_file_size %}
+                        <tr>
+                            <td class="text-muted"><strong>WAL file:</strong></td>
+                            <td>{{ db_info.sqlite.wal_file_size }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if db_info.sqlite.shm_file_size %}
+                        <tr>
+                            <td class="text-muted"><strong>SHM file:</strong></td>
+                            <td>{{ db_info.sqlite.shm_file_size }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if db_info.sqlite.pool_size %}
+                        <tr>
+                            <td class="text-muted"><strong>SQLAlchemy pool_size:</strong></td>
+                            <td>{{ db_info.sqlite.pool_size }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                    {% endif %}
+
+                    {% if db_info.postgresql %}
+                    <hr class="my-3">
+                    <h6 class="text-muted mb-2"><i class="fas fa-cog"></i> PostgreSQL Mode <small class="fw-normal">(database + pg_settings)</small></h6>
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted" style="width: 45%;"><strong>SQLAlchemy pool_size:</strong></td>
+                            <td><code class="small">{{ db_info.postgresql.pool_size }}</code> <small class="text-muted">(config)</small></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>sqlalchemy_echo:</strong></td>
+                            <td><code class="small">{{ db_info.postgresql.sqlalchemy_echo }}</code> <small class="text-muted">(config)</small></td>
+                        </tr>
+                    </table>
+                    <table class="table table-sm table-borderless mb-0 mt-2">
+                        {% for name, value in db_info.postgresql.settings.items() %}
+                        <tr>
+                            <td class="text-muted" style="width: 45%;"><strong>{{ name }}:</strong></td>
+                            <td>
+                                {% if name == 'synchronous_commit' %}
+                                <span class="badge {% if value == 'on' %}bg-success{% elif value == 'off' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ value }}</span>
+                                {% else %}
+                                <code class="small">{{ value }}</code>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% endif %}
+
+                    {% if db_info.mysql %}
+                    <hr class="my-3">
+                    <h6 class="text-muted mb-2"><i class="fas fa-cog"></i> MySQL/MariaDB Mode <small class="fw-normal">(database + VARIABLES)</small></h6>
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted" style="width: 45%;"><strong>SQLAlchemy pool_size:</strong></td>
+                            <td><code class="small">{{ db_info.mysql.pool_size }}</code> <small class="text-muted">(config)</small></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><strong>sqlalchemy_echo:</strong></td>
+                            <td><code class="small">{{ db_info.mysql.sqlalchemy_echo }}</code> <small class="text-muted">(config)</small></td>
+                        </tr>
+                        {% if db_info.mysql.settings.version_comment and db_info.mysql.settings.version_comment != 'Unknown' %}
+                        <tr>
+                            <td class="text-muted"><strong>version_comment:</strong></td>
+                            <td><small>{{ db_info.mysql.settings.version_comment }}</small></td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                    <table class="table table-sm table-borderless mb-0 mt-2">
+                        {% for name, value in db_info.mysql.settings.items() %}
+                        {% if name != 'version_comment' %}
+                        <tr>
+                            <td class="text-muted" style="width: 45%;"><strong>{{ name }}:</strong></td>
+                            <td>
+                                {% if name == 'innodb_flush_log_at_trx_commit' %}
+                                <span class="badge {% if value|string == '1' %}bg-success{% elif value|string == '2' %}bg-info{% else %}bg-warning text-dark{% endif %}">{{ value }}</span>
+                                {% elif name == 'sql_mode' %}
+                                <code class="small" style="word-break: break-all;">{{ value }}</code>
+                                {% else %}
+                                <code class="small">{{ value }}</code>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </table>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
         <!-- Правая колонка: Database Pool Monitoring и Pool Usage History -->
-        <div class="col-md-8">
+        <div class="col-md-8 d-flex flex-column">
             <!-- Database Pool Monitoring -->
-            <div class="card">
+            <div class="card flex-shrink-0">
                 <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-chart-line"></i> Database Pool Monitoring</h5>
                 </div>
@@ -148,13 +306,15 @@
                 </div>
             </div>
 
-            <!-- Pool Usage History -->
-            <div class="card mt-4">
-                <div class="card-header">
+            <!-- Pool Usage History: растягивается до высоты левой колонки / Database Tables -->
+            <div class="card mt-4 flex-grow-1 d-flex flex-column" style="min-height: 220px;">
+                <div class="card-header flex-shrink-0">
                     <h5 class="mb-0"><i class="fas fa-chart-area"></i> Pool Usage History</h5>
                 </div>
-                <div class="card-body">
-                    <canvas id="poolHistoryChart" height="100"></canvas>
+                <div class="card-body flex-grow-1 d-flex flex-column p-3" style="min-height: 0;">
+                    <div class="flex-grow-1 position-relative w-100" style="min-height: 160px;">
+                        <canvas id="poolHistoryChart" style="position: absolute; inset: 0; width: 100% !important; height: 100% !important;"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -279,6 +439,7 @@ function updatePoolHistoryChart() {
                 },  
                 options: {  
                     responsive: true,  
+                    maintainAspectRatio: false,  
                     scales: {  
                         y: {  
                             type: 'linear',  
